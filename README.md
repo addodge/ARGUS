@@ -1,6 +1,6 @@
 # ARGUS
 Senior Projects Ground Station Software
-Requirements:
+Requirements:\n
   Anaconda Python 3
   numpy
   tkinter

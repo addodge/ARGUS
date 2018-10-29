@@ -29,7 +29,7 @@ def change_azel_state():
 # Produce Azimuth and Elevation - THIS NEEDS TO BE CHANGED TO ACTUAL AZ/EL
 def azel_points():
     az = random() * 2*np.pi
-    el = random() * np.pi/2
+    el = random() * 90
     return az, el
 
 ################################################################
@@ -51,6 +51,13 @@ def fft_points(cf):
 # Calibrate az/el - THIS NEEDS TO ACTUALLY CALIBRATE AND AUTOTRACK
 def calibrate():
     print("Calibrated")
+    
+# Determine Next Pass timing and azimuth of start and finish - THIS NEEDS TO ACTUALLY CALCULATE
+def nextpass():
+    start = "10:30:04 November 1 2018, Az = 36 degrees"
+    finish = "10:41:16 November 1 2018, Az = 197 degrees"
+    maxel = "26 degrees"
+    return start, finish, maxel
 
 ################################################################
 def main():
@@ -92,7 +99,7 @@ def main():
     
     qthloc = StringVar()
     qthentry = Entry(bl, textvariable=qthloc)
-    qthloc.set("boulder.qth")
+    qthloc.set("Boulder.qth")
     
     tle = Label(bl, text="TLE File:")
     
@@ -104,16 +111,16 @@ def main():
     ax = fig.add_subplot(111, projection='polar')
     ax.set_title("Azimuth and Elevation of Satellite")
     ax.grid(True)
-    ax.set_ylim(0, np.pi/2)
+    ax.set_ylim(0, 90)
     graph = FigureCanvasTkAgg(fig, master=bl)
     
-    # Plot Azimuth and Elevation - THIS NEEDS TO BE UPDATED
+    # Plot Azimuth and Elevation
     def azelplot():
         while continuePlotting1:
             ax.cla()
             ax.set_title("Azimuth and Elevation of Satellite")
             ax.grid(True)
-            ax.set_ylim(0, np.pi/2)
+            ax.set_ylim(0, 90)
             az, el = azel_points()
             ax.plot(az, el, marker='o', color='orange')
             graph.draw()
@@ -127,17 +134,17 @@ def main():
     b = Button(bl, text="Start/Stop", command=azel_handler, bg="red", fg="white")
     
     # Top Right Frame - FFT Plot
-    cf = Label(tr, text="Center Frequency:")
+    cf = Label(tr, text="Center Frequency [MHz]:")
     
     centerfreq = StringVar()
     freqentry = Entry(tr, textvariable=centerfreq)
-    centerfreq.set("2250000000")
+    centerfreq.set("2250")
     
     fig2 = Figure()
     ax2 = fig2.add_subplot(111)
-    ax2.set_xlabel("Frequency [Hz]")
+    ax2.set_xlabel("Frequency [MHz]")
     ax2.set_title("FFT Frequency Plot")
-    ax2.set_xlim(2000000000, 2500000000)
+    ax2.set_xlim(2000, 2500)
     ax2.set_ylim(0,10)
     ax2.grid()
     graph2 = FigureCanvasTkAgg(fig2, master=tr)
@@ -146,13 +153,13 @@ def main():
     def fftplot():
         while continuePlotting2:
             ax2.cla()
-            ax2.set_xlabel("Frequency [Hz]")
+            ax2.set_xlabel("Frequency [MHz]")
             ax2.set_title("FFT Frequency Plot")
-            ax2.set_xlim(2200000000, 2300000000)
+            ax2.set_xlim(2200, 2300)
             ax2.set_ylim(0,10)
             ax2.grid()
-            freq, mag = fft_points(int(str(centerfreq.get())))
-            ax2.plot(freq, mag, marker='o', color='blue')
+            freq, mag = fft_points(int(str(centerfreq.get())) * 1000000)
+            ax2.plot(freq/1000000, mag, marker='o', color='blue')
             graph2.draw()
             time.sleep(0.5)
 
@@ -164,6 +171,11 @@ def main():
     b2 = Button(tr, text="Start/Stop", command=fft_handler, bg="red", fg="white")
     
     # Bottom Right Frame - 
+    np_l = Label(br, text="Next Pass:")
+    start, finish, maxel = nextpass()
+    np_s = Label(br, text = "Start: "+start)
+    np_f = Label(br, text = "Finish: "+finish)
+    np_me = Label(br, text = "Maximum Elevation: "+maxel)
     
     # Pack Frames
     left.pack(side="left", expand=True, fill="both")
@@ -190,6 +202,10 @@ def main():
     b2.pack(side='left')
     cf.pack(side="left")
     freqentry.pack(side="left")
+    np_l.pack(side="top")
+    np_s.pack(side="top")
+    np_f.pack(side="top")
+    np_me.pack(side="top")
     
     # Start GUI
     root.mainloop()

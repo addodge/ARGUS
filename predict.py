@@ -1,3 +1,7 @@
+# Python Module for Satellite Prediction
+# Created by Jesse Trutna
+# Adapded by Adam Dodge for ARGUS Senior Project
+
 import os
 import time
 import urllib.request as urllib2

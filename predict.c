@@ -2,6 +2,7 @@
 *          PREDICT: A satellite tracking/orbital prediction program         *
 *          Project started 26-May-1991 by John A. Magliacane, KD2BD         *
 *                        Last update: 14-May-2006                           *
+*              Adapded for ARGUS Senior Projects by Adam Dodge              *
 *****************************************************************************
 *                                                                           *
 * This program is free software; you can redistribute it and/or modify it   *

@@ -4,6 +4,7 @@ ARGUS
 __Senior Projects Ground Station Software__<br />
 __University of Colorado, Boulder__<br />
 __Smead Department of Aerospace Engineering Sciences__ <br />
+__Team:__ <br />
 Adam Dodge, Trevor Barth, Anahid Blaisdell, Geraldine Fuentes,<br />
 Thomas Fulton, Adam Hess, Janell Lopez, Diana Mata, <br />
 Tyler Murphy, Stuart Penkowsky, Michael Tzimourakas
@@ -26,7 +27,7 @@ mv cpredict.*string relating to operating system*.so cpredict.so
 ```
 __Note:__ change `*string relating to operating system*` to the actual directory/file names in your folder.
 
-### Run:
+### Usage:
 
 ```./argus.py```
 

@@ -19,6 +19,9 @@ from cpredict import quick_find, quick_predict, PredictException
 # Booleans for plotting on/off
 continuePlotting1 = False
 continuePlotting2 = False
+manflag = True
+progflag = False
+autoflag = False
 ################################################################
 # Load latitude, longitude, elevation
 def load_qth(qthfile):
@@ -76,10 +79,41 @@ def nextpass(tlefile, qthfile):
         endaz.append(predict.observe(tle, qth, transit.end)['azimuth'])
         maxel.append(transit.peak()['elevation'])
     return starttime, endtime, startaz, endaz, maxel
-        
+
+def increase_elevation():
+    global manflag
+    if manflag:
+        print("Elevaion Increased")
+
+def decrease_elevation():
+    global manflag
+    if manflag:
+        print("Elevation Decreased")
+
+def increase_azimuth():
+    global manflag
+    if manflag:
+        print("Azimuth Increased")
+
+def decrease_azimuth():
+    global manflag
+    if manflag:
+        print("Azimuth Decreased")
+
+def uppress(event):
+    increase_elevation()
+
+def downpress(event):
+    decrease_elevation()
+
+def rightpress(event):
+    increase_azimuth()
+
+def leftpress(event):
+    decrease_azimuth()
 ################################################################
 def main():
-    global continuePlotting1, continuePlotting2
+    global continuePlotting1, continuePlotting2, manflag, progflag, autoflag
     # Create root GUI
     root = Tk()
     root.title("ARGUS Ground Station")
@@ -112,7 +146,44 @@ def main():
     descrip = Label(tl1, text="This is the GUI for the ARGUS \nGround Station for Tracking LEO Satellites.") 
     
     # Calibration Frame
+    
     cbutton = Button(tl2, text="Calibrate", bg="blue", fg="white", command=calibrate)
+    
+    operation = Menubutton(tl2, text="Manual Mode"+'\u25BC')
+    picks = Menu(operation)
+    operation.config(menu=picks, relief=RAISED, bg='white')
+    
+    def go_program():
+        global manflag, progflag, autoflag
+        progflag=True
+        autoflag=False
+        manflag=False
+        operation.configure(text="Program Track"+'\u25BC')
+    def go_manual():
+        global manflag, progflag, autoflag
+        progflag=False
+        autoflag=False
+        manflag=True
+        operation.configure(text="Manual Mode"+'\u25BC')
+    def go_auto():
+        global manflag, progflag, autoflag
+        progflag=False
+        autoflag=True
+        manflag=False
+        operation.configure(text="Auto Track"+'\u25BC')
+    
+    picks.add_command(label="Manual Mode", command=go_manual)
+    picks.add_command(label="Program Track", command=go_program)
+    picks.add_command(label="Auto Track (?)", command=go_auto)
+    
+    b_up = Button(tl2, text="+El "+'\u25b2', bg="black", fg="white", command=increase_elevation)
+    root.bind('<Up>', uppress)
+    b_down = Button(tl2, text="-El "+'\u25BC', bg="black", fg="white", command=decrease_elevation)
+    root.bind('<Down>', downpress)
+    b_left = Button(tl2, text="-Az "+'\u25C0', bg="black", fg="white", command=increase_azimuth)
+    root.bind('<Left>', leftpress)
+    b_right = Button(tl2, text="+Az "+'\u25B6', bg="black", fg="white", command=decrease_azimuth)
+    root.bind('<Right>', rightpress)
     
     # Bottom Left Frame - Azimuth/Elevation Plot
     qth = Label(bl, text="QTH File:")
@@ -241,6 +312,11 @@ def main():
     logo.pack(side="top")
     descrip.pack(side="top")
     cbutton.pack(side="top")
+    operation.pack(side="top", padx=10, pady=10)
+    b_up.pack(side="top")
+    b_down.pack(side="top")
+    b_left.pack(side="top")
+    b_right.pack(side="top")
     graph.get_tk_widget().pack(side="bottom",fill='both', expand=True)
     b.pack(side='left')
     qth.pack(side="left")

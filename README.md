@@ -33,3 +33,6 @@ __Note:__ change `*string relating to operating system*` to the actual directory
 ```./argus.py```
 
 __Note:__ python3 must be in /usr/bin/python3.
+
+### Acknowledgements:
+predict.py, setup.py, and predict.c adapted from PyPredict (https://github.com/nsat/pypredict)

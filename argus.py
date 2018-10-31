@@ -10,37 +10,39 @@ from tkinter import *
 from PIL import ImageTk, Image
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-import time, threading
+import time, threading, unittest
 from random import random, randint
 import multiprocessing as mp
+import predict
+from cpredict import quick_find, quick_predict, PredictException
 
 # Booleans for plotting on/off
 continuePlotting1 = False
 continuePlotting2 = False
 ################################################################
-# switch az/el plot on/off
-def change_azel_state():
-    global continuePlotting1
-    if continuePlotting1 == True:
-        continuePlotting1 = False
-    else:
-        continuePlotting1 = True
-        
-# Produce Azimuth and Elevation - THIS NEEDS TO BE CHANGED TO ACTUAL AZ/EL
-def azel_points():
-    az = random() * 2*np.pi
-    el = random() * 90
-    return az, el
+# Load latitude, longitude, elevation
+def load_qth(qthfile):
+    with open(qthfile, 'r') as myfile:
+        qth = myfile.readlines()
+    qth = list(map(lambda s: s.strip(), qth))
+    qth = predict.massage_qth(tuple(qth[1:]))
+    return qth
 
-################################################################
-# switch fft plot on/off
-def change_fft_state():
-    global continuePlotting2
-    if continuePlotting2 == True:
-        continuePlotting2 = False
-    else:
-        continuePlotting2 = True
-    
+# Load orbital elements 
+def load_tle(tlefile):
+    with open(tlefile, 'r') as myfile:
+        tle = myfile.read()
+    tle = predict.massage_tle(tle)
+    return(tle)
+        
+# Produce Azimuth and Elevation using Predict
+def azel_points(tlefile, qthfile):
+    qth = load_qth(qthfile)
+    tle = load_tle(tlefile)
+    data = predict.observe(tle, qth)
+    return data['azimuth'], data['elevation']
+
+################################################################    
 # Produce FFT points - THIS NEEDS TO BE CHANGED TO ACTUAL FFT
 def fft_points(cf):
     freq = np.sort(np.random.rand(10) * 20000000 + cf - 10000000)
@@ -53,12 +55,27 @@ def calibrate():
     print("Calibrated")
     
 # Determine Next Pass timing and azimuth of start and finish - THIS NEEDS TO ACTUALLY CALCULATE
-def nextpass():
+def nextpass(tlefile, qthfile):
+    qth = load_qth(qthfile)
+    tle = load_tle(tlefile)
+    p = predict.transits(tle, qth)
+    starttime = []
+    endtime = []
+    startaz = []
+    endaz = []
+    maxel = []
+    for i in range(0,3):
+        transit = next(p)
+        starttime.append(time.ctime(transit.start))
+        endtime.append(time.ctime(transit.end))
+        startaz.append(predict.observe(tle, qth, transit.start)['azimuth'])
+        endaz.append(predict.observe(tle, qth, transit.end)['azimuth'])
+        maxel.append(transit.peak()['elevation'])
     start = "10:30:04 November 1 2018, Az = 36 degrees"
     finish = "10:41:16 November 1 2018, Az = 197 degrees"
-    maxel = "26 degrees"
-    return start, finish, maxel
-
+    maxel1 = "26 degrees"
+    return starttime, endtime, startaz, endaz, maxel
+        
 ################################################################
 def main():
     global continuePlotting1, continuePlotting2
@@ -80,7 +97,7 @@ def main():
     br = Frame(right, borderwidth=2, relief="solid")
     
     # Top Left Frame - exit, logo, description
-    exitbutton = Button(tl1, text="QUIT", fg="red", command=tl.quit)
+    exitbutton = Button(tl1, text="QUIT", bg="red", fg="white", command=tl.quit)
     
     path = "ARGUS_Logo.png"
     img = Image.open(path)
@@ -92,7 +109,7 @@ def main():
     descrip = Label(tl1, text="This is the GUI for the ARGUS \nGround Station for Tracking LEO Satellites.") 
     
     # Calibration Frame
-    cbutton = Button(tl2, text="Calibrate", fg="green", command=calibrate)
+    cbutton = Button(tl2, text="Calibrate", bg="blue", fg="white", command=calibrate)
     
     # Bottom Left Frame - Azimuth/Elevation Plot
     qth = Label(bl, text="QTH File:")
@@ -109,7 +126,7 @@ def main():
     
     fig = Figure()
     ax = fig.add_subplot(111, projection='polar')
-    ax.set_title("Azimuth and Elevation of Satellite")
+    ax.set_title("Azimuth and Elevation of "+str(tleloc.get()))
     ax.grid(True)
     ax.set_ylim(0, 90)
     graph = FigureCanvasTkAgg(fig, master=bl)
@@ -118,20 +135,25 @@ def main():
     def azelplot():
         while continuePlotting1:
             ax.cla()
-            ax.set_title("Azimuth and Elevation of Satellite")
+            ax.set_title("Azimuth and Elevation of "+str(tleloc.get()))
             ax.grid(True)
             ax.set_ylim(0, 90)
-            az, el = azel_points()
+            az, el = azel_points(str(tleloc.get()), str(qthloc.get()))
             ax.plot(az, el, marker='o', color='orange')
             graph.draw()
             time.sleep(0.5)
 
     # Spawn Azimuth and Elevation process
     def azel_handler():
-        change_azel_state()
-        threading.Thread(target=azelplot).start()
+        global continuePlotting1
+        if continuePlotting1 == False:
+            continuePlotting1 = True
+            b.configure(text="Stop", fg="red")
+        else:
+            continuePlotting1 = False
+            b.configure(text="Start", fg="green")
     
-    b = Button(bl, text="Start/Stop", command=azel_handler, bg="red", fg="white")
+    b = Button(bl, text="Start", command=azel_handler, fg="green")
     
     # Top Right Frame - FFT Plot
     cf = Label(tr, text="Center Frequency [MHz]:")
@@ -165,17 +187,37 @@ def main():
 
     # Spawn FFT process
     def fft_handler():
-        change_fft_state()
+        global continuePlotting2
+        if continuePlotting2 == False:
+            continuePlotting2 = True
+            b2.configure(text="Stop", fg="red")
+        else:
+            continuePlotting2 = False
+            b2.configure(text="Start", fg="green")
         threading.Thread(target=fftplot).start()
     
-    b2 = Button(tr, text="Start/Stop", command=fft_handler, bg="red", fg="white")
+    b2 = Button(tr, text="Start", command=fft_handler, fg="green")
     
     # Bottom Right Frame - 
-    np_l = Label(br, text="Next Pass:")
-    start, finish, maxel = nextpass()
-    np_s = Label(br, text = "Start: "+start)
-    np_f = Label(br, text = "Finish: "+finish)
-    np_me = Label(br, text = "Maximum Elevation: "+maxel)
+    starttime, endtime, startaz, endaz, maxel = nextpass(str(tleloc.get()), str(qthloc.get()))
+    np_l = Label(br, text="Upcoming Passes for "+str(tleloc.get())+":\n"+
+        "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+str(round(startaz[0],2))+"\nFinish: "+endtime[0]+
+        ", Azimuth: "+str(round(endaz[0],2))+"\nMaximum Elevation: "+str(round(maxel[0],2))+
+        "\nPass 2:\nStart: "+starttime[1]+", Azimuth: "+str(round(startaz[1],2))+"\nFinish: "+endtime[1]+
+        ", Azimuth: "+str(round(endaz[1],2))+"\nMaximum Elevation: "+str(round(maxel[1],2))+
+        "\nPass 3:\nStart: "+starttime[2]+", Azimuth: "+str(round(startaz[2],2))+"\nFinish: "+endtime[2]+
+        ", Azimuth: "+str(round(endaz[2],2))+"\nMaximum Elevation: "+str(round(maxel[2],2)))
+    
+    def recalculate():
+        starttime, endtime, startaz, endaz, maxel = nextpass(str(tleloc.get()), str(qthloc.get()))
+        np_l.configure(text="Upcoming Passes for "+str(tleloc.get())+":\n"+
+            "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+str(round(startaz[0],2))+"\nFinish: "+endtime[0]+
+            ", Azimuth: "+str(round(endaz[0],2))+"\nMaximum Elevation: "+str(round(maxel[0],2))+
+            "\nPass 2:\nStart: "+starttime[1]+", Azimuth: "+str(round(startaz[1],2))+"\nFinish: "+endtime[1]+
+            ", Azimuth: "+str(round(endaz[1],2))+"\nMaximum Elevation: "+str(round(maxel[1],2))+
+            "\nPass 3:\nStart: "+starttime[2]+", Azimuth: "+str(round(startaz[2],2))+"\nFinish: "+endtime[2]+
+            ", Azimuth: "+str(round(endaz[2],2))+"\nMaximum Elevation: "+str(round(maxel[2],2)))
+    np_button = Button(br, text="Recalculate", command=recalculate, bg="blue", fg="white")
     
     # Pack Frames
     left.pack(side="left", expand=True, fill="both")
@@ -203,9 +245,7 @@ def main():
     cf.pack(side="left")
     freqentry.pack(side="left")
     np_l.pack(side="top")
-    np_s.pack(side="top")
-    np_f.pack(side="top")
-    np_me.pack(side="top")
+    np_button.pack(side="top")
     
     # Start GUI
     root.mainloop()

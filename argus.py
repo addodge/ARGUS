@@ -85,6 +85,8 @@ def main():
     #root.attributes("-fullscreen", True)
     #root.geometry("800x800")
     root.configure(background='grey')
+    img = PhotoImage(file='ARGUS_Logo.gif')
+    root.tk.call('wm', 'iconphoto', root._w, img)
     
     # Create Frames
     left = Frame(root, borderwidth=2, relief="solid")

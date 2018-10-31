@@ -4,7 +4,7 @@ ARGUS
 __Senior Projects Ground Station Software__<br />
 __University of Colorado, Boulder__<br />
 __Smead Department of Aerospace Engineering Sciences__ <br />
-=======
+<br />
 __Team:__ <br />
 Adam Dodge, Trevor Barth, Anahid Blaisdell, Geraldine Fuentes,<br />
 Thomas Fulton, Adam Hess, Janell Lopez, Diana Mata, <br />

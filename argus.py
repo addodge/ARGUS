@@ -10,7 +10,7 @@ from tkinter import *
 from PIL import ImageTk, Image
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-import time, threading, unittest
+import time, threading, unittest, os
 from random import random, randint
 import multiprocessing as mp
 import predict
@@ -22,16 +22,24 @@ continuePlotting2 = False
 ################################################################
 # Load latitude, longitude, elevation
 def load_qth(qthfile):
-    with open(qthfile, 'r') as myfile:
-        qth = myfile.readlines()
+    try:
+        with open(qthfile, 'r') as myfile:
+            qth = myfile.readlines()
+    except IOError:
+        print('Error Reading '+qthfile+". Exiting.")
+        os._exit(1)
     qth = list(map(lambda s: s.strip(), qth))
     qth = predict.massage_qth(tuple(qth[1:]))
     return qth
 
 # Load orbital elements 
 def load_tle(tlefile):
-    with open(tlefile, 'r') as myfile:
-        tle = myfile.read()
+    try:
+        with open(tlefile, 'r') as myfile:
+            tle = myfile.read()
+    except IOError:
+        print('Error Reading '+tlefile+". Exiting.")
+        os._exit(1)
     tle = predict.massage_tle(tle)
     return(tle)
         
@@ -54,16 +62,12 @@ def fft_points(cf):
 def calibrate():
     print("Calibrated")
     
-# Determine Next Pass timing and azimuth of start and finish - THIS NEEDS TO ACTUALLY CALCULATE
+# Determine Next Pass timing and azimuth of start and finish time/azimuth
 def nextpass(tlefile, qthfile):
     qth = load_qth(qthfile)
     tle = load_tle(tlefile)
     p = predict.transits(tle, qth)
-    starttime = []
-    endtime = []
-    startaz = []
-    endaz = []
-    maxel = []
+    starttime, endtime, startaz, endaz, maxel = ([] for i in range(5))
     for i in range(0,3):
         transit = next(p)
         starttime.append(time.ctime(transit.start))
@@ -71,9 +75,6 @@ def nextpass(tlefile, qthfile):
         startaz.append(predict.observe(tle, qth, transit.start)['azimuth'])
         endaz.append(predict.observe(tle, qth, transit.end)['azimuth'])
         maxel.append(transit.peak()['elevation'])
-    start = "10:30:04 November 1 2018, Az = 36 degrees"
-    finish = "10:41:16 November 1 2018, Az = 197 degrees"
-    maxel1 = "26 degrees"
     return starttime, endtime, startaz, endaz, maxel
         
 ################################################################
@@ -135,12 +136,14 @@ def main():
     
     # Plot Azimuth and Elevation
     def azelplot():
+        qthfile = str(qthloc.get())
+        tlefile = str(tleloc.get())
         while continuePlotting1:
             ax.cla()
-            ax.set_title("Azimuth and Elevation of "+str(tleloc.get()))
+            ax.set_title("Azimuth and Elevation of "+tlefile)
             ax.grid(True)
             ax.set_ylim(0, 90)
-            az, el = azel_points(str(tleloc.get()), str(qthloc.get()))
+            az, el = azel_points(tlefile, qthfile)
             ax.plot(az, el, marker='o', color='orange')
             graph.draw()
             time.sleep(0.5)
@@ -154,6 +157,7 @@ def main():
         else:
             continuePlotting1 = False
             b.configure(text="Start", fg="green")
+        threading.Thread(target=azelplot).start()
     
     b = Button(bl, text="Start", command=azel_handler, fg="green")
     
@@ -201,24 +205,25 @@ def main():
     b2 = Button(tr, text="Start", command=fft_handler, fg="green")
     
     # Bottom Right Frame - 
+    degree_sign= u'\N{DEGREE SIGN}'
     starttime, endtime, startaz, endaz, maxel = nextpass(str(tleloc.get()), str(qthloc.get()))
     np_l = Label(br, text="Upcoming Passes for "+str(tleloc.get())+":\n"+
-        "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+str(round(startaz[0],2))+"\nFinish: "+endtime[0]+
-        ", Azimuth: "+str(round(endaz[0],2))+"\nMaximum Elevation: "+str(round(maxel[0],2))+
-        "\nPass 2:\nStart: "+starttime[1]+", Azimuth: "+str(round(startaz[1],2))+"\nFinish: "+endtime[1]+
-        ", Azimuth: "+str(round(endaz[1],2))+"\nMaximum Elevation: "+str(round(maxel[1],2))+
-        "\nPass 3:\nStart: "+starttime[2]+", Azimuth: "+str(round(startaz[2],2))+"\nFinish: "+endtime[2]+
-        ", Azimuth: "+str(round(endaz[2],2))+"\nMaximum Elevation: "+str(round(maxel[2],2)))
+        "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+str(round(startaz[0],2))+degree_sign+"\nFinish: "+endtime[0]+
+        ", Azimuth: "+str(round(endaz[0],2))+degree_sign+"\nMaximum Elevation: "+str(round(maxel[0],2))+degree_sign+
+        "\nPass 2:\nStart: "+starttime[1]+", Azimuth: "+str(round(startaz[1],2))+degree_sign+"\nFinish: "+endtime[1]+
+        ", Azimuth: "+str(round(endaz[1],2))+degree_sign+"\nMaximum Elevation: "+str(round(maxel[1],2))+degree_sign+
+        "\nPass 3:\nStart: "+starttime[2]+", Azimuth: "+str(round(startaz[2],2))+degree_sign+"\nFinish: "+endtime[2]+
+        ", Azimuth: "+str(round(endaz[2],2))+degree_sign+"\nMaximum Elevation: "+str(round(maxel[2],2))+degree_sign)
     
     def recalculate():
         starttime, endtime, startaz, endaz, maxel = nextpass(str(tleloc.get()), str(qthloc.get()))
         np_l.configure(text="Upcoming Passes for "+str(tleloc.get())+":\n"+
-            "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+str(round(startaz[0],2))+"\nFinish: "+endtime[0]+
-            ", Azimuth: "+str(round(endaz[0],2))+"\nMaximum Elevation: "+str(round(maxel[0],2))+
-            "\nPass 2:\nStart: "+starttime[1]+", Azimuth: "+str(round(startaz[1],2))+"\nFinish: "+endtime[1]+
-            ", Azimuth: "+str(round(endaz[1],2))+"\nMaximum Elevation: "+str(round(maxel[1],2))+
-            "\nPass 3:\nStart: "+starttime[2]+", Azimuth: "+str(round(startaz[2],2))+"\nFinish: "+endtime[2]+
-            ", Azimuth: "+str(round(endaz[2],2))+"\nMaximum Elevation: "+str(round(maxel[2],2)))
+        "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+str(round(startaz[0],2))+degree_sign+"\nFinish: "+endtime[0]+
+        ", Azimuth: "+str(round(endaz[0],2))+degree_sign+"\nMaximum Elevation: "+str(round(maxel[0],2))+degree_sign+
+        "\nPass 2:\nStart: "+starttime[1]+", Azimuth: "+str(round(startaz[1],2))+degree_sign+"\nFinish: "+endtime[1]+
+        ", Azimuth: "+str(round(endaz[1],2))+degree_sign+"\nMaximum Elevation: "+str(round(maxel[1],2))+degree_sign+
+        "\nPass 3:\nStart: "+starttime[2]+", Azimuth: "+str(round(startaz[2],2))+degree_sign+"\nFinish: "+endtime[2]+
+        ", Azimuth: "+str(round(endaz[2],2))+degree_sign+"\nMaximum Elevation: "+str(round(maxel[2],2))+degree_sign)
     np_button = Button(br, text="Recalculate", command=recalculate, bg="blue", fg="white")
     
     # Pack Frames

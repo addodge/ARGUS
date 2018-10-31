@@ -1,9 +1,9 @@
 ARGUS
 =======
 
-Senior Projects Ground Station Software <br />
-University of Colorado, Boulder <br />
-Smead Department of Aerospace Engineering Sciences <br />
+##### Senior Projects Ground Station Software <br />
+##### University of Colorado, Boulder <br />
+##### Smead Department of Aerospace Engineering Sciences <br />
 Adam Dodge, Trevor Barth, Anahid Blaisdell, Geraldine Fuentes,<br />
 Thomas Fulton, Adam Hess, Janell Lopez, Diana Mata, <br />
 Tyler Murphy, Stuart Penkowsky, Michael Tzimourakas
@@ -17,7 +17,7 @@ Tyler Murphy, Stuart Penkowsky, Michael Tzimourakas
   - matplotlib
   - random
 
-##### Setup:
+### Setup:
 
 ```
 sudo python setup.py install 
@@ -26,7 +26,7 @@ mv cpredict.*string relating to operating system*.so cpredict.so
 ```
 __Note:__ change `*string relating to operating system*` to what is in your files.
 
-##### Run:
+### Run:
 
 ```./argus.py```
 

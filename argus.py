@@ -359,7 +359,10 @@ def main():
     
     # Start GUI
     root.mainloop()
-    root.destroy()
+    try:
+        root.destroy()
+    except:
+        pass
 ################################################################
 if __name__ == "__main__":
     main()

@@ -157,36 +157,30 @@ def main():
     ##### Calibration Frame
     # Calibrate Button
     cbutton = Button(tl2, text="Calibrate", bg="blue", fg="black", command=calibrate)
-    
-    # Operation Mode Dropdown Menu
-    operation = Menubutton(tl2, text="Manual Mode"+'\u25BC')
-    picks = Menu(operation)
-    operation.config(menu=picks, relief=RAISED, bg='white', fg="black")
-    
+
     # Functions for switching modes
     def go_program():
         global manflag, progflag, autoflag
         progflag=True
         autoflag=False
         manflag=False
-        operation.configure(text="Program Track"+'\u25BC')
     def go_manual():
         global manflag, progflag, autoflag
         progflag=False
         autoflag=False
         manflag=True
-        operation.configure(text="Manual Mode"+'\u25BC')
     def go_auto():
         global manflag, progflag, autoflag
         progflag=False
         autoflag=True
         manflag=False
-        operation.configure(text="Auto Track"+'\u25BC')
-        
-    # add menu options
-    picks.add_command(label="Manual Mode", command=go_manual)
-    picks.add_command(label="Program Track", command=go_program)
-    picks.add_command(label="Auto Track (?)", command=go_auto)
+    
+    # Create Radio Buttons for mode selection
+    var = IntVar()
+    var.set(1)
+    R1 = Radiobutton(tl2, text="Manual Mode", variable=var, value=1, command=go_manual)
+    R2 = Radiobutton(tl2, text="Program Track", variable=var, value=2, command=go_program)
+    R3 = Radiobutton(tl2, text="Auto Track", variable=var, value=3, command=go_auto)
     
     # Create antenna motion buttons, map arrow keys to same functions
     b_up = Button(tl2, text="+El "+'\u25b2', bg="white", fg="black", command=increase_elevation)
@@ -343,7 +337,9 @@ def main():
     logo.pack(side="top")
     descrip.pack(side="top")
     cbutton.pack(side="top")
-    operation.pack(side="top", padx=10, pady=10)
+    R1.pack(side="top")
+    R2.pack(side="top")
+    R3.pack(side="top")
     b_up.pack(side="top")
     b_down.pack(side="top")
     b_left.pack(side="top")

@@ -21,10 +21,9 @@ azelplotflag = False # True if plot is active
 fftplotflag = False # True if plot is active
 manflag = True # True if in manual mode
 progflag = False # True if in program track mode
-autoflag = False # True if in auto track mode
 currentAz = 0 # Current Pointing azimuth
 currentEl = 0 # Current Pointing Elevation
-
+step = 0.05 #step movement for antenna
 ################################################################
 # Load latitude, longitude, elevation
 def load_qth(qthfile):
@@ -87,24 +86,37 @@ def nextpass(tlefile, qthfile):
 ################################################################
 # Functions for changing the azimuth and elevation - THESE NEED TO DO SOMETHING
 def increase_elevation():
-    global manflag
+    global manflag, currentEl, step
     if manflag:
-        print("Elevaion Increased")
+        if currentEl+step < 90:
+            currentEl = currentEl + step
+        else:
+            currentEl=90
 
 def decrease_elevation():
-    global manflag
+    global manflag, currentEl, step
     if manflag:
-        print("Elevation Decreased")
+        if currentEl-step > 0:
+            currentEl = currentEl - step
+        else:
+            currentEl=0
+        
 
 def increase_azimuth():
-    global manflag
+    global manflag, currentAz, step
     if manflag:
-        print("Azimuth Increased")
+        if currentAz+step > 360:
+            currentAz = currentAz + step - 360
+        else:
+            currentAz = currentAz + step
 
 def decrease_azimuth():
-    global manflag
+    global manflag, currentAz, step
     if manflag:
-        print("Azimuth Decreased")
+        if currentAz-step < 0:
+            currentAz = currentAz - step + 360
+        else:
+            currentAz = currentAz - step
 
 ################################################################
 # Define Arrow Presses for Manual Mode
@@ -122,7 +134,7 @@ def leftpress(event):
 
 ################################################################
 def main():
-    global azelplotflag, fftplotflag, manflag, progflag, autoflag
+    global azelplotflag, fftplotflag, manflag, progflag, autoflag, currentAz, currentEl
     ###### Create root GUI
     root = Tk()
     root.title("ARGUS Ground Station")
@@ -162,26 +174,18 @@ def main():
     def go_program():
         global manflag, progflag, autoflag
         progflag=True
-        autoflag=False
         manflag=False
     def go_manual():
         global manflag, progflag, autoflag
         progflag=False
-        autoflag=False
         manflag=True
-    def go_auto():
-        global manflag, progflag, autoflag
-        progflag=False
-        autoflag=True
-        manflag=False
     
     # Create Radio Buttons for mode selection
     var = IntVar()
     var.set(1)
     R1 = Radiobutton(tl2, text="Manual Mode", variable=var, value=1, command=go_manual)
     R2 = Radiobutton(tl2, text="Program Track", variable=var, value=2, command=go_program)
-    R3 = Radiobutton(tl2, text="Auto Track", variable=var, value=3, command=go_auto)
-    
+        
     # Create antenna motion buttons, map arrow keys to same functions
     b_up = Button(tl2, text="+El "+'\u25b2', bg="white", fg="black", command=increase_elevation)
     root.bind('<Up>', uppress)
@@ -191,6 +195,42 @@ def main():
     root.bind('<Left>', leftpress)
     b_right = Button(tl2, text="+Az "+'\u25B6', bg="white", fg="black", command=decrease_azimuth)
     root.bind('<Right>', rightpress)
+    
+    # Show azimuth and elevation, allow
+    def set_azel():
+        global currentAz, currentEl, manflag
+        if manflag:
+            azinput_val = float(str(azinput.get()))
+            elinput_val = float(str(elinput.get()))
+            if elinput_val > 90:
+                currentEl = 90
+            elif elinput_val < 0:
+                currentEl = 0
+            else:
+                currentEl = elinput_val
+            while azinput_val > 360:
+                azinput_val = azinput_val-360
+            while azinput_val < 0:
+                azinput_val = azinput_val+360
+            currentAz = azinput_val
+            azinput.set(str(round(currentAz, 2)))
+            elinput.set(str(round(currentEl, 2)))
+    
+    azellabel = Label(bl, text="Current Azimuth: "+str(round(currentAz, 2))+", Current Elevation: "+str(round(currentEl, 2)))
+    azlabel = Label(tl2, text="Input Azimuth: ")
+    ellabel = Label(tl2, text="Input Elevation: ")
+    azinput = StringVar()
+    elinput = StringVar()
+    azentry = Entry(tl2, textvariable=azinput)
+    elentry = Entry(tl2, textvariable=elinput)
+    azinput.set(str(round(currentAz, 2)))
+    elinput.set(str(round(currentEl, 2)))
+    b_azelinput = Button(tl2, text="Set Az/El", bg="white", fg="black", command=set_azel)
+    
+    def set_azel_label():
+        global currentAz, currentEl
+        azellabel['text'] = "Current Azimuth: "+str(round(currentAz, 2))+", Current Elevation: "+str(round(currentEl, 2))
+        root.after(1, set_azel_label)
     
     #### Bottom Left Frame - Azimuth/Elevation Plot
     # QTH file input
@@ -215,6 +255,7 @@ def main():
     
     # Function to Plot Azimuth and Elevation
     def azelplot():
+        global azelplotflag, progflag, currentAz, currentEl
         qthfile = str(qthloc.get())
         tlefile = str(tleloc.get())
         while azelplotflag:
@@ -225,7 +266,13 @@ def main():
             az, el = azel_points(tlefile, qthfile)
             ax.plot(az, el, marker='o', color='orange')
             graph.draw()
-            time.sleep(0.5)
+            time.sleep(0.2)
+            if progflag:
+                currentAz = az
+                if el>0:
+                    currentEl = el
+                else:
+                    currentEl = 0
 
     # Spawn Azimuth and Elevation process, switch state
     def azel_handler():
@@ -239,7 +286,7 @@ def main():
         threading.Thread(target=azelplot).start() #Start new process to plot
     # Start/stop plotting button
     b = Button(bl, text="Start", command=azel_handler, bg="green", fg='black')
-    
+
     ##### Top Right Frame - FFT Plot
     # Input for Desired Frequency
     cf = Label(tr, text="Center Frequency [MHz]:")
@@ -269,7 +316,7 @@ def main():
             freq, mag = fft_points(int(str(centerfreq.get())) * 1000000)
             ax2.plot(freq/1000000, mag, marker='o', color='blue')
             graph2.draw()
-            time.sleep(0.5)
+            time.sleep(0.2)
 
     # Spawn FFT process, change state
     def fft_handler():
@@ -339,11 +386,16 @@ def main():
     cbutton.pack(side="top")
     R1.pack(side="top")
     R2.pack(side="top")
-    R3.pack(side="top")
     b_up.pack(side="top")
     b_down.pack(side="top")
     b_left.pack(side="top")
     b_right.pack(side="top")
+    azellabel.pack(side="bottom")
+    b_azelinput.pack(side="bottom")
+    elentry.pack(side="bottom")
+    ellabel.pack(side="bottom")
+    azentry.pack(side="bottom")
+    azlabel.pack(side="bottom")
     graph.get_tk_widget().pack(side="bottom",fill='both', expand=True)
     b.pack(side='left')
     qth.pack(side="left")
@@ -358,11 +410,13 @@ def main():
     np_button.pack(side="top")
     
     # Start GUI
+    set_azel_label()
     root.mainloop()
     try:
         root.destroy()
     except:
         pass
+    os._exit(1)
 ################################################################
 if __name__ == "__main__":
     main()

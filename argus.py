@@ -122,7 +122,7 @@ def leftpress(event):
 
 ################################################################
 def main():
-    global continuePlotting1, continuePlotting2, manflag, progflag, autoflag
+    global azelplotflag, fftplotflag, manflag, progflag, autoflag
     ###### Create root GUI
     root = Tk()
     root.title("ARGUS Ground Station")
@@ -143,7 +143,7 @@ def main():
     
     ##### Top Left Frame - exit, logo, description
     # exit button
-    exitbutton = Button(tl1, text="QUIT", bg="red", fg="white", command=tl.quit)
+    exitbutton = Button(tl1, text="QUIT", bg="red", fg="black", command=tl.quit)
     
     # logo
     img = Image.open("ARGUS_Logo.png").resize((200,200), Image.ANTIALIAS)
@@ -156,12 +156,12 @@ def main():
     
     ##### Calibration Frame
     # Calibrate Button
-    cbutton = Button(tl2, text="Calibrate", bg="blue", fg="white", command=calibrate)
+    cbutton = Button(tl2, text="Calibrate", bg="blue", fg="black", command=calibrate)
     
     # Operation Mode Dropdown Menu
     operation = Menubutton(tl2, text="Manual Mode"+'\u25BC')
     picks = Menu(operation)
-    operation.config(menu=picks, relief=RAISED, bg='white')
+    operation.config(menu=picks, relief=RAISED, bg='white', fg="black")
     
     # Functions for switching modes
     def go_program():
@@ -189,13 +189,13 @@ def main():
     picks.add_command(label="Auto Track (?)", command=go_auto)
     
     # Create antenna motion buttons, map arrow keys to same functions
-    b_up = Button(tl2, text="+El "+'\u25b2', bg="black", fg="white", command=increase_elevation)
+    b_up = Button(tl2, text="+El "+'\u25b2', bg="white", fg="black", command=increase_elevation)
     root.bind('<Up>', uppress)
-    b_down = Button(tl2, text="-El "+'\u25BC', bg="black", fg="white", command=decrease_elevation)
+    b_down = Button(tl2, text="-El "+'\u25BC', bg="white", fg="black", command=decrease_elevation)
     root.bind('<Down>', downpress)
-    b_left = Button(tl2, text="-Az "+'\u25C0', bg="black", fg="white", command=increase_azimuth)
+    b_left = Button(tl2, text="-Az "+'\u25C0', bg="white", fg="black", command=increase_azimuth)
     root.bind('<Left>', leftpress)
-    b_right = Button(tl2, text="+Az "+'\u25B6', bg="black", fg="white", command=decrease_azimuth)
+    b_right = Button(tl2, text="+Az "+'\u25B6', bg="white", fg="black", command=decrease_azimuth)
     root.bind('<Right>', rightpress)
     
     #### Bottom Left Frame - Azimuth/Elevation Plot
@@ -223,7 +223,7 @@ def main():
     def azelplot():
         qthfile = str(qthloc.get())
         tlefile = str(tleloc.get())
-        while continuePlotting1:
+        while azelplotflag:
             ax.cla()
             ax.set_title("Azimuth and Elevation of "+tlefile)
             ax.grid(True)
@@ -235,16 +235,16 @@ def main():
 
     # Spawn Azimuth and Elevation process, switch state
     def azel_handler():
-        global continuePlotting1
-        if continuePlotting1 == False:
-            continuePlotting1 = True
-            b.configure(text="Stop", fg="red")
+        global azelplotflag
+        if azelplotflag == False:
+            azelplotflag = True
+            b.configure(text="Stop", bg="red", fg='black')
         else:
-            continuePlotting1 = False
-            b.configure(text="Start", fg="green")
+            azelplotflag = False
+            b.configure(text="Start", bg="green", fg='black')
         threading.Thread(target=azelplot).start() #Start new process to plot
     # Start/stop plotting button
-    b = Button(bl, text="Start", command=azel_handler, fg="green")
+    b = Button(bl, text="Start", command=azel_handler, bg="green", fg='black')
     
     ##### Top Right Frame - FFT Plot
     # Input for Desired Frequency
@@ -265,7 +265,7 @@ def main():
     
     # Plot fft points
     def fftplot():
-        while continuePlotting2:
+        while fftplotflag:
             ax2.cla()
             ax2.set_xlabel("Frequency [MHz]")
             ax2.set_title("Signal Frequency Distribution")
@@ -279,17 +279,17 @@ def main():
 
     # Spawn FFT process, change state
     def fft_handler():
-        global continuePlotting2
-        if continuePlotting2 == False:
-            continuePlotting2 = True
-            b2.configure(text="Stop", fg="red")
+        global fftplotflag
+        if fftplotflag == False:
+            fftplotflag = True
+            b2.configure(text="Stop", bg="red", fg='black')
         else:
-            continuePlotting2 = False
-            b2.configure(text="Start", fg="green")
+            fftplotflag = False
+            b2.configure(text="Start", bg="green", fg='black')
         threading.Thread(target=fftplot).start() #Start new plotting process
     
     # Start/Stop Plotting button
-    b2 = Button(tr, text="Start", command=fft_handler, fg="green")
+    b2 = Button(tr, text="Start", command=fft_handler, bg="green", fg='black')
     
     # Bottom Right Frame - Future Passes
     degree_sign= u'\N{DEGREE SIGN}'
@@ -326,7 +326,7 @@ def main():
             "\nMaximum Elevation: "+str(round(maxel[2],2))+degree_sign)
     
     # Button for recalculation of future passes
-    np_button = Button(br, text="Recalculate", command=recalculate, bg="blue", fg="white")
+    np_button = Button(br, text="Recalculate", command=recalculate, bg="blue", fg="black")
     
     # Pack Frames
     left.pack(side="left", expand=True, fill="both")

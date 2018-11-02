@@ -88,7 +88,7 @@ def nextpass(tlefile, qthfile):
 def increase_elevation():
     global manflag, currentEl, step
     if manflag:
-        if currentEl+step < 90:
+        if currentEl+step <= 90:
             currentEl = currentEl + step
         else:
             currentEl=90
@@ -96,7 +96,7 @@ def increase_elevation():
 def decrease_elevation():
     global manflag, currentEl, step
     if manflag:
-        if currentEl-step > 0:
+        if currentEl-step >= 0:
             currentEl = currentEl - step
         else:
             currentEl=0
@@ -105,7 +105,7 @@ def decrease_elevation():
 def increase_azimuth():
     global manflag, currentAz, step
     if manflag:
-        if currentAz+step > 360:
+        if currentAz+step >= 360:
             currentAz = currentAz + step - 360
         else:
             currentAz = currentAz + step
@@ -166,9 +166,10 @@ def main():
     # GUI Description
     descrip = Label(tl1, text="This is the GUI for the ARGUS \nGround Station for Tracking LEO Satellites.") 
     
-    ##### Calibration Frame
     # Calibrate Button
-    cbutton = Button(tl2, text="Calibrate", bg="blue", fg="black", command=calibrate)
+    cbutton = Button(tl1, text="Calibrate", bg="blue", fg="black", command=calibrate)
+    
+    ##### Pointing Frame
 
     # Functions for switching modes
     def go_program():
@@ -196,7 +197,7 @@ def main():
     b_right = Button(tl2, text="+Az "+'\u25B6', bg="white", fg="black", command=decrease_azimuth)
     root.bind('<Right>', rightpress)
     
-    # Show azimuth and elevation, allow
+    # Show azimuth and elevation, allow for input
     def set_azel():
         global currentAz, currentEl, manflag
         if manflag:
@@ -216,7 +217,6 @@ def main():
             azinput.set(str(round(currentAz, 2)))
             elinput.set(str(round(currentEl, 2)))
     
-    azellabel = Label(bl, text="Current Azimuth: "+str(round(currentAz, 2))+", Current Elevation: "+str(round(currentEl, 2)))
     azlabel = Label(tl2, text="Input Azimuth: ")
     ellabel = Label(tl2, text="Input Elevation: ")
     azinput = StringVar()
@@ -226,10 +226,12 @@ def main():
     azinput.set(str(round(currentAz, 2)))
     elinput.set(str(round(currentEl, 2)))
     b_azelinput = Button(tl2, text="Set Az/El", bg="white", fg="black", command=set_azel)
+    azellabel = Label(tl2, text="Current Azimuth: %3.2f, Current Elevation: %3.2f" % (currentAz, currentEl))
+    pointlabel = Label(tl2, text="Antenna Pointing:")
     
     def set_azel_label():
         global currentAz, currentEl
-        azellabel['text'] = "Current Azimuth: "+str(round(currentAz, 2))+", Current Elevation: "+str(round(currentEl, 2))
+        azellabel['text'] = "Current Azimuth: %3.2f, Current Elevation: %3.2f" % (currentAz, currentEl)
         root.after(1, set_azel_label)
     
     #### Bottom Left Frame - Azimuth/Elevation Plot
@@ -250,7 +252,11 @@ def main():
     ax = fig.add_subplot(111, projection='polar')
     ax.set_title("Azimuth and Elevation of "+str(tleloc.get()))
     ax.grid(True)
-    ax.set_ylim(0, 90)
+    ax.set_rlim(90, 0, 1)
+    ax.set_yticks(np.arange(0, 91, 10))
+    ax.set_yticklabels(ax.get_yticks()[::-1])
+    ax.invert_yaxis()
+    ax.set_theta_zero_location("N")
     graph = FigureCanvasTkAgg(fig, master=bl)
     
     # Function to Plot Azimuth and Elevation
@@ -262,9 +268,14 @@ def main():
             ax.cla()
             ax.set_title("Azimuth and Elevation of "+tlefile)
             ax.grid(True)
-            ax.set_ylim(0, 90)
+            ax.set_rlim(90, 0, 1)
+            ax.set_yticks(np.arange(0, 91, 10))
+            ax.set_yticklabels(ax.get_yticks()[::-1])
+            ax.invert_yaxis()
+            ax.set_theta_zero_location("N")
             az, el = azel_points(tlefile, qthfile)
-            ax.plot(az, el, marker='o', color='orange')
+            #az, el = np.pi, 10
+            ax.plot(az, 90-el, marker='o', color='orange')
             graph.draw()
             time.sleep(0.2)
             if progflag:
@@ -273,7 +284,7 @@ def main():
                     currentEl = el
                 else:
                     currentEl = 0
-
+    
     # Spawn Azimuth and Elevation process, switch state
     def azel_handler():
         global azelplotflag
@@ -384,6 +395,7 @@ def main():
     logo.pack(side="top")
     descrip.pack(side="top")
     cbutton.pack(side="top")
+    pointlabel.pack(side="top")
     R1.pack(side="top")
     R2.pack(side="top")
     b_up.pack(side="top")

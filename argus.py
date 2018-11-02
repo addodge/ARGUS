@@ -275,7 +275,7 @@ def main():
             ax.set_theta_zero_location("N")
             az, el = azel_points(tlefile, qthfile)
             #az, el = np.pi, 10
-            ax.plot(az, 90-el, marker='o', color='orange')
+            ax.plot(az*np.pi/180, 90-el, marker='o', color='orange')
             graph.draw()
             time.sleep(0.2)
             if progflag:

@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/env python3
 ################################################################
 # Adam Dodge
 # ARGUS Ground Station GUI
@@ -15,6 +15,7 @@ from random import random, randint
 import multiprocessing as mp
 import predict
 from cpredict import quick_find, quick_predict, PredictException
+import ephem
 
 # Globals
 azelplotflag = False # True if plot is active
@@ -65,7 +66,21 @@ def fft_points(cf):
 
 ################################################################
 # Calibrate az/el - THIS NEEDS TO ACTUALLY CALIBRATE AND AUTOTRACK
-def calibrate():
+def calibrate(qthfile):
+    global currentAz, currentEl
+    qth = load_qth(qthfile)
+    observer = ephem.Observer()
+    observer.lat , observer.lon, observer.elevation = qth
+    # Assume pointing close enough to the sun to get a signal
+    
+    # !!!!! Autotrack to find the center of the sun !!!!!!!
+    
+    # Track Sun to determine azimuth and elevation
+    sun = ephem.Sun()
+    sun.compute(observer)
+    
+    # Set current Az/El to this azimuth and elevation
+    currentAz, currentEl = sun.az, sun.alt
     print("Calibrated")
     
 # Determine Next Pass timing and azimuth of start and finish time/azimuth
@@ -142,6 +157,9 @@ def main():
     root.configure(background='grey')
     img = PhotoImage(file='ARGUS_Logo.gif')
     root.tk.call('wm', 'iconphoto', root._w, img)
+    #myFont = Font(family="Arial", size=12)
+    qthloc = StringVar()
+    tleloc = StringVar()
     
     # Create Frames
     left = Frame(root, borderwidth=2, relief="solid") #Split in half
@@ -164,10 +182,13 @@ def main():
     image = img
     
     # GUI Description
-    descrip = Label(tl1, text="This is the GUI for the ARGUS \nGround Station for Tracking LEO Satellites.") 
+    descrip = Label(tl1, text="This is the GUI for the ARGUS \nGround Station for Tracking LEO Satellites.", font="Times 12") 
     
     # Calibrate Button
-    cbutton = Button(tl1, text="Calibrate", bg="blue", fg="black", command=calibrate)
+    def call_calibrate():
+        calibrate(str(qthloc.get()))
+    cbutton = Button(tl1, text="Calibrate", bg="blue", fg="black", command=call_calibrate)
+    
     
     ##### Pointing Frame
 
@@ -237,13 +258,11 @@ def main():
     #### Bottom Left Frame - Azimuth/Elevation Plot
     # QTH file input
     qth = Label(bl, text="QTH File:")
-    qthloc = StringVar()
     qthentry = Entry(bl, textvariable=qthloc)
     qthloc.set("Boulder.qth")
     
     # TLE file input
     tle = Label(bl, text="TLE File:")
-    tleloc = StringVar()
     tleentry = Entry(bl, textvariable=tleloc)
     tleloc.set("MTI.tle")
     

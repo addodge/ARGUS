@@ -36,6 +36,7 @@ def load_qth(qthfile):
         os._exit(1)
     qth = list(map(lambda s: s.strip(), qth))
     qth = predict.massage_qth(tuple(qth[1:])) #use predict.py to change variable types
+    qth = (qth[0], -qth[1], qth[2])
     return qth
 
 # Load orbital elements 
@@ -71,6 +72,8 @@ def calibrate(qthfile):
     qth = load_qth(qthfile)
     observer = ephem.Observer()
     observer.lat , observer.lon, observer.elevation = qth
+    observer.lon = -observer.lon
+    #observer.date = time.strftime("%Y/%m/%d %T",time.localtime())
     # Assume pointing close enough to the sun to get a signal
     
     # !!!!! Autotrack to find the center of the sun !!!!!!!
@@ -78,9 +81,8 @@ def calibrate(qthfile):
     # Track Sun to determine azimuth and elevation
     sun = ephem.Sun()
     sun.compute(observer)
-    
     # Set current Az/El to this azimuth and elevation
-    currentAz, currentEl = sun.az, sun.alt
+    currentAz, currentEl = sun.az*180/np.pi, sun.alt*180/np.pi
     print("Calibrated")
     
 # Determine Next Pass timing and azimuth of start and finish time/azimuth
@@ -157,7 +159,7 @@ def main():
     root.configure(background='grey')
     img = PhotoImage(file='ARGUS_Logo.gif')
     root.tk.call('wm', 'iconphoto', root._w, img)
-    #myFont = Font(family="Arial", size=12)
+    root.option_add('*Font', 'fixed')
     qthloc = StringVar()
     tleloc = StringVar()
     
@@ -182,7 +184,7 @@ def main():
     image = img
     
     # GUI Description
-    descrip = Label(tl1, text="This is the GUI for the ARGUS \nGround Station for Tracking LEO Satellites.", font="Times 12") 
+    descrip = Label(tl1, text="This is the GUI for the ARGUS \nGround Station for Tracking LEO Satellites.") 
     
     # Calibrate Button
     def call_calibrate():

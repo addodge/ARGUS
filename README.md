@@ -34,5 +34,13 @@ __Note:__ change `*string relating to operating system*` to the actual directory
 
 __Note:__ python3 must be in /usr/bin/python3.
 
+__Note 2:__ QTH file in Location Name, Latitude (N), Longitude (E), Elevation (meters) format
+
+__Note 3:__ TLE in following format:
+'''ISS
+1 25544U 98067A   04236.56031392  .00020137  00000-0  16538-3 0  9993
+2 25544  51.6335 344.7760 0007976 126.2523 325.9359 15.70406856328906
+'''
+
 ### Acknowledgements:
 predict.py, setup.py, and predict.c adapted from PyPredict (https://github.com/nsat/pypredict)

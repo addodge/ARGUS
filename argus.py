@@ -35,9 +35,10 @@ def load_qth(qthfile):
         print('Error Reading '+qthfile+". Exiting.")
         os._exit(1)
     qth = list(map(lambda s: s.strip(), qth))
+    locname = qth[0]
     qth = predict.massage_qth(tuple(qth[1:])) #use predict.py to change variable types
     qth = (qth[0], -qth[1], qth[2])
-    return qth
+    return qth, locname
 
 # Load orbital elements 
 def load_tle(tlefile):
@@ -48,14 +49,15 @@ def load_tle(tlefile):
         print('Error Reading '+tlefile+". Exiting.")
         os._exit(1)
     tle = predict.massage_tle(tle) #use predict.py to separate elements
-    return(tle)
+    satname = tle[0]
+    return tle, satname
         
 # Produce Azimuth and Elevation using Predict
 def azel_points(tlefile, qthfile):
-    qth = load_qth(qthfile)
-    tle = load_tle(tlefile)
+    qth, locname = load_qth(qthfile)
+    tle, satname = load_tle(tlefile)
     data = predict.observe(tle, qth) #find current state
-    return data['azimuth'], data['elevation']
+    return data['azimuth'], data['elevation'], locname, satname
 
 ################################################################    
 # Produce FFT points - THIS NEEDS TO BE CHANGED TO ACTUAL FFT
@@ -69,11 +71,10 @@ def fft_points(cf):
 # Calibrate az/el - THIS NEEDS TO ACTUALLY CALIBRATE AND AUTOTRACK
 def calibrate(qthfile):
     global currentAz, currentEl
-    qth = load_qth(qthfile)
+    qth, _ = load_qth(qthfile)
     observer = ephem.Observer()
     observer.lat , observer.lon, observer.elevation = qth
     observer.lon = -observer.lon
-    #observer.date = time.strftime("%Y/%m/%d %T",time.localtime())
     # Assume pointing close enough to the sun to get a signal
     
     # !!!!! Autotrack to find the center of the sun !!!!!!!
@@ -87,8 +88,8 @@ def calibrate(qthfile):
     
 # Determine Next Pass timing and azimuth of start and finish time/azimuth
 def nextpass(tlefile, qthfile):
-    qth = load_qth(qthfile) #load qth
-    tle = load_tle(tlefile) # load tle
+    qth, locname = load_qth(qthfile) #load qth
+    tle, satname = load_tle(tlefile) # load tle
     p = predict.transits(tle, qth) # predict future passes
     starttime, endtime, startaz, endaz, maxel = ([] for i in range(5)) #initialize
     for i in range(3): # Predict 3 passes
@@ -98,7 +99,7 @@ def nextpass(tlefile, qthfile):
         startaz.append(predict.observe(tle, qth, transit.start)['azimuth'])
         endaz.append(predict.observe(tle, qth, transit.end)['azimuth'])
         maxel.append(transit.peak()['elevation'])
-    return starttime, endtime, startaz, endaz, maxel
+    return starttime, endtime, startaz, endaz, maxel, locname, satname
 
 ################################################################
 # Functions for changing the azimuth and elevation - THESE NEED TO DO SOMETHING
@@ -271,7 +272,8 @@ def main():
     # Az/El Plot figure creation
     fig = Figure()
     ax = fig.add_subplot(111, projection='polar')
-    ax.set_title("Azimuth and Elevation of "+str(tleloc.get()))
+    _, _, locname, satname = azel_points(str(tleloc.get()), str(qthloc.get()))
+    ax.set_title("Azimuth and Elevation of "+satname+" over "+locname)
     ax.grid(True)
     ax.set_rlim(90, 0, 1)
     ax.set_yticks(np.arange(0, 91, 10))
@@ -287,14 +289,14 @@ def main():
         tlefile = str(tleloc.get())
         while azelplotflag:
             ax.cla()
-            ax.set_title("Azimuth and Elevation of "+tlefile)
             ax.grid(True)
             ax.set_rlim(90, 0, 1)
             ax.set_yticks(np.arange(0, 91, 10))
             ax.set_yticklabels(ax.get_yticks()[::-1])
             ax.invert_yaxis()
             ax.set_theta_zero_location("N")
-            az, el = azel_points(tlefile, qthfile)
+            az, el, locname, satname = azel_points(tlefile, qthfile)
+            ax.set_title("Azimuth and Elevation of "+satname+" over "+locname)
             #az, el = np.pi, 10
             ax.plot(az*np.pi/180, 90-el, marker='o', color='orange')
             graph.draw()
@@ -366,8 +368,8 @@ def main():
     
     # Bottom Right Frame - Future Passes
     degree_sign= u'\N{DEGREE SIGN}'
-    starttime, endtime, startaz, endaz, maxel = nextpass(str(tleloc.get()), str(qthloc.get()))
-    np_l = Label(br, text="Upcoming Passes for "+str(tleloc.get())+":\n"+
+    starttime, endtime, startaz, endaz, maxel, locname, satname = nextpass(str(tleloc.get()), str(qthloc.get()))
+    np_l = Label(br, text="Upcoming Passes for "+str(satname)+" over "+str(locname)+":\n"+
         "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+
         str(round(startaz[0],2))+degree_sign+"\nFinish: "+endtime[0]+
         ", Azimuth: "+str(round(endaz[0],2))+degree_sign+
@@ -383,8 +385,8 @@ def main():
     
     # Function to recalculate future passes if new TLE loaded
     def recalculate():
-        starttime, endtime, startaz, endaz, maxel = nextpass(str(tleloc.get()), str(qthloc.get()))
-        np_l.configure(text="Upcoming Passes for "+str(tleloc.get())+":\n"+
+        starttime, endtime, startaz, endaz, maxel, locname, satname = nextpass(str(tleloc.get()), str(qthloc.get()))
+        np_l.configure(text="Upcoming Passes for "+str(satname)+" over "+str(locname)+":\n"+
             "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+
             str(round(startaz[0],2))+degree_sign+"\nFinish: "+endtime[0]+
             ", Azimuth: "+str(round(endaz[0],2))+degree_sign+

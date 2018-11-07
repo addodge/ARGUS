@@ -68,23 +68,27 @@ def fft_points(cf):
     return freq, mag
 
 ################################################################
-# Calibrate az/el - THIS NEEDS TO ACTUALLY CALIBRATE AND AUTOTRACK
+# Calibrate az/el - THIS NEEDS TO ACTUALLY AUTOTRACK
 def calibrate(qthfile):
     global currentAz, currentEl
+    print("Calibrating...")
     qth, _ = load_qth(qthfile)
     observer = ephem.Observer()
     observer.lat , observer.lon, observer.elevation = qth
     observer.lon = -observer.lon
-    # Assume pointing close enough to the sun to get a signal
-    
-    # !!!!! Autotrack to find the center of the sun !!!!!!!
-    
     # Track Sun to determine azimuth and elevation
     sun = ephem.Sun()
     sun.compute(observer)
+    if sun.alt<0:
+        print("Sun not visible, Calibration not possible. Exiting.")
+        os._exit(1)
+    # Assume pointing close enough to the sun to get a signal
+    # !!!!! Autotrack to find the center of the sun !!!!!!!
+    
+    
     # Set current Az/El to this azimuth and elevation
     currentAz, currentEl = sun.az*180/np.pi, sun.alt*180/np.pi
-    print("Calibrated")
+    print("Done.")
     
 # Determine Next Pass timing and azimuth of start and finish time/azimuth
 def nextpass(tlefile, qthfile):
@@ -102,7 +106,7 @@ def nextpass(tlefile, qthfile):
     return starttime, endtime, startaz, endaz, maxel, locname, satname
 
 ################################################################
-# Functions for changing the azimuth and elevation - THESE NEED TO DO SOMETHING
+# Functions for changing the azimuth and elevation
 def increase_elevation():
     global manflag, currentEl, step
     if manflag:

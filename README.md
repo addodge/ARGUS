@@ -17,7 +17,6 @@ Tyler Murphy, Stuart Penkowsky, Michael Tzimourakas
   - tkinter
   - PIL
   - matplotlib
-  - random
   - ephem
 
 ### Setup:

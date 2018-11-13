@@ -68,14 +68,25 @@ def fft_points(cf):
     return freq, mag
 
 ################################################################
+# Convert degrees.decimal to degrees:minutes:seconds.decimal string
+def intdeg2dms(deg):
+    d = int(deg)
+    md = abs(deg - d) * 60
+    m = int(md)
+    sd = (md - m) * 60
+    return '%d:%d:%f' % (d, m, sd)
+
+################################################################
 # Calibrate az/el - THIS NEEDS TO ACTUALLY AUTOTRACK
 def calibrate(qthfile):
     global currentAz, currentEl
     print("Calibrating...")
     qth, _ = load_qth(qthfile)
     observer = ephem.Observer()
-    observer.lat , observer.lon, observer.elevation = qth
-    observer.lon = -observer.lon
+    observer.lat = intdeg2dms(qth[0])
+    observer.lon = intdeg2dms(-qth[1])
+    observer.elevation = qth[2]
+
     # Track Sun to determine azimuth and elevation
     sun = ephem.Sun()
     sun.compute(observer)
@@ -196,7 +207,6 @@ def main():
         calibrate(str(qthloc.get()))
     cbutton = Button(tl1, text="Calibrate", bg="blue", fg="black", command=call_calibrate)
     
-    
     ##### Pointing Frame
 
     # Functions for switching modes
@@ -301,7 +311,6 @@ def main():
             ax.set_theta_zero_location("N")
             az, el, locname, satname = azel_points(tlefile, qthfile)
             ax.set_title("Azimuth and Elevation of "+satname+" over "+locname)
-            #az, el = np.pi, 10
             ax.plot(az*np.pi/180, 90-el, marker='o', color='orange')
             graph.draw()
             time.sleep(0.2)

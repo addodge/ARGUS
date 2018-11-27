@@ -24,7 +24,7 @@ manflag = True # True if in manual mode
 progflag = False # True if in program track mode
 currentAz = 0 # Current Pointing azimuth
 currentEl = 0 # Current Pointing Elevation
-step = 0.05 #step movement for antenna
+step = 0.1 #step movement for antenna
 ################################################################
 # Load latitude, longitude, elevation
 def load_qth(qthfile):
@@ -100,6 +100,17 @@ def calibrate(qthfile):
     # Set current Az/El to this azimuth and elevation
     currentAz, currentEl = sun.az*180/np.pi, sun.alt*180/np.pi
     print("Done.")
+
+def findsun(qthfile):
+    qth, _ = load_qth(qthfile)
+    observer = ephem.Observer()
+    observer.lat = intdeg2dms(qth[0])
+    observer.lon = intdeg2dms(-qth[1])
+    observer.elevation = qth[2]
+    sun = ephem.Sun()
+    sun.compute(observer)
+    sunAz, sunEl = sun.az*180/np.pi, sun.alt*180/np.pi
+    return sunAz, sunEl
     
 # Determine Next Pass timing and azimuth of start and finish time/azimuth
 def nextpass(tlefile, qthfile):
@@ -180,32 +191,35 @@ def main():
     tleloc = StringVar()
     
     # Create Frames
-    left = Frame(root, borderwidth=2, relief="solid") #Split in half
-    right = Frame(root, borderwidth=2, relief="solid")
-    tl = Frame(left, borderwidth=2, relief="solid") #Top Left
-    tl1 = Frame(tl, borderwidth=2, relief="solid") #Split top left
-    tl2 = Frame(tl, borderwidth=2, relief="solid")
-    tr = Frame(right, borderwidth=2, relief="solid") #Top Right
-    bl = Frame(left, borderwidth=2, relief="solid") #Bottom Left
-    br = Frame(right, borderwidth=2, relief="solid") #Bottom Right
+    #left = Frame(root, borderwidth=2, relief="solid") #Split in half
+    #right = Frame(root, borderwidth=2, relief="solid")
+    t = Frame(root, borderwidth=2, relief="solid") #Top
+    t1 = Frame(t, borderwidth=2, relief="solid") #Top left
+    t2 = Frame(t, borderwidth=2, relief="solid") #Top Right
+    t1t = Frame(t1, borderwidth=2, relief="solid") #Top left top
+    t1b = Frame(t1, borderwidth=2, relief="solid") #Top left bottom
+    #tr = Frame(right, borderwidth=2, relief="solid") #Top Right
+    b = Frame(root, borderwidth=2, relief="solid") #Bottom Left
+    #br = Frame(right, borderwidth=2, relief="solid") #Bottom Right
     
     ##### Top Left Frame - exit, logo, description
     # exit button
-    exitbutton = Button(tl1, text="QUIT", bg="red", fg="black", command=tl.quit)
+    exitbutton = Button(t1t, text="QUIT", bg="red", fg="black", command=t1.quit)
     
     # logo
-    img = Image.open("ARGUS_Logo.png").resize((200,200), Image.ANTIALIAS)
+    img = Image.open("ARGUS_Logo.png").resize((80,80), Image.ANTIALIAS)
     img = ImageTk.PhotoImage(img)
-    logo = Label(tl1, image=img)
-    image = img
+    logo = Label(t1t, image=img)
+    #image = img
     
     # GUI Description
-    descrip = Label(tl1, text="This is the GUI for the ARGUS \nGround Station for Tracking LEO Satellites.") 
+    descrip = Label(t1t, text="ARGUS\nTracking\nGUI") 
     
     # Calibrate Button
     def call_calibrate():
-        calibrate(str(qthloc.get()))
-    cbutton = Button(tl1, text="Calibrate", bg="blue", fg="black", command=call_calibrate)
+        calibrate(str(qthloc.get()))   
+        
+    cbutton = Button(t1t, text="Calibrate", bg="blue", fg="black", command=call_calibrate)
     
     ##### Pointing Frame
 
@@ -222,17 +236,17 @@ def main():
     # Create Radio Buttons for mode selection
     var = IntVar()
     var.set(1)
-    R1 = Radiobutton(tl2, text="Manual Mode", variable=var, value=1, command=go_manual)
-    R2 = Radiobutton(tl2, text="Program Track", variable=var, value=2, command=go_program)
+    R1 = Radiobutton(t2, text="Manual Mode", variable=var, value=1, command=go_manual)
+    R2 = Radiobutton(t2, text="Program Track", variable=var, value=2, command=go_program)
         
     # Create antenna motion buttons, map arrow keys to same functions
-    b_up = Button(tl2, text="+El "+'\u25b2', bg="white", fg="black", command=increase_elevation)
+    b_up = Button(t2, text="+El "+'\u25b2', bg="white", fg="black", command=increase_elevation)
     root.bind('<Up>', uppress)
-    b_down = Button(tl2, text="-El "+'\u25BC', bg="white", fg="black", command=decrease_elevation)
+    b_down = Button(t2, text="-El "+'\u25BC', bg="white", fg="black", command=decrease_elevation)
     root.bind('<Down>', downpress)
-    b_left = Button(tl2, text="-Az "+'\u25C0', bg="white", fg="black", command=increase_azimuth)
+    b_left = Button(t2, text="+Az "+'\u25B6', bg="white", fg="black", command=increase_azimuth)
     root.bind('<Left>', leftpress)
-    b_right = Button(tl2, text="+Az "+'\u25B6', bg="white", fg="black", command=decrease_azimuth)
+    b_right = Button(t2, text="-Az "+'\u25C0', bg="white", fg="black", command=decrease_azimuth)
     root.bind('<Right>', rightpress)
     
     # Show azimuth and elevation, allow for input
@@ -255,17 +269,17 @@ def main():
             azinput.set(str(round(currentAz, 2)))
             elinput.set(str(round(currentEl, 2)))
     
-    azlabel = Label(tl2, text="Input Azimuth: ")
-    ellabel = Label(tl2, text="Input Elevation: ")
+    azlabel = Label(t2, text="Input Azimuth: ")
+    ellabel = Label(t2, text="Input Elevation: ")
     azinput = StringVar()
     elinput = StringVar()
-    azentry = Entry(tl2, textvariable=azinput)
-    elentry = Entry(tl2, textvariable=elinput)
+    azentry = Entry(t2, textvariable=azinput)
+    elentry = Entry(t2, textvariable=elinput)
     azinput.set(str(round(currentAz, 2)))
     elinput.set(str(round(currentEl, 2)))
-    b_azelinput = Button(tl2, text="Set Az/El", bg="white", fg="black", command=set_azel)
-    azellabel = Label(tl2, text="Current Azimuth: %3.2f, Current Elevation: %3.2f" % (currentAz, currentEl))
-    pointlabel = Label(tl2, text="Antenna Pointing:")
+    b_azelinput = Button(t2, text="Set Az/El", bg="white", fg="black", command=set_azel)
+    azellabel = Label(t2, text="Current Azimuth: %3.2f, Current Elevation: %3.2f" % (currentAz, currentEl))
+    pointlabel = Label(t2, text="Antenna Pointing:")
     
     def set_azel_label():
         global currentAz, currentEl
@@ -274,13 +288,13 @@ def main():
     
     #### Bottom Left Frame - Azimuth/Elevation Plot
     # QTH file input
-    qth = Label(bl, text="QTH File:")
-    qthentry = Entry(bl, textvariable=qthloc)
+    qth = Label(b, text="QTH File:")
+    qthentry = Entry(b, textvariable=qthloc)
     qthloc.set("Boulder.qth")
     
     # TLE file input
-    tle = Label(bl, text="TLE File:")
-    tleentry = Entry(bl, textvariable=tleloc)
+    tle = Label(b, text="TLE File:")
+    tleentry = Entry(b, textvariable=tleloc)
     tleloc.set("MTI.tle")
     
     # Az/El Plot figure creation
@@ -294,7 +308,8 @@ def main():
     ax.set_yticklabels(ax.get_yticks()[::-1])
     ax.invert_yaxis()
     ax.set_theta_zero_location("N")
-    graph = FigureCanvasTkAgg(fig, master=bl)
+    ax.set_theta_direction(-1)
+    graph = FigureCanvasTkAgg(fig, master=b)
     
     # Function to Plot Azimuth and Elevation
     def azelplot():
@@ -309,9 +324,13 @@ def main():
             ax.set_yticklabels(ax.get_yticks()[::-1])
             ax.invert_yaxis()
             ax.set_theta_zero_location("N")
+            ax.set_theta_direction(-1)
             az, el, locname, satname = azel_points(tlefile, qthfile)
+            sunAz, sunEl = findsun(qthfile)
             ax.set_title("Azimuth and Elevation of "+satname+" over "+locname)
-            ax.plot(az*np.pi/180, 90-el, marker='o', color='orange')
+            ax.scatter(az*np.pi/180, 90-el, marker='o', color='blue', label=satname)
+            ax.scatter(sunAz*np.pi/180, 90-sunEl, marker='o', color='orange', label='Sun')
+            ax.legend()
             graph.draw()
             time.sleep(0.2)
             if progflag:
@@ -326,30 +345,30 @@ def main():
         global azelplotflag
         if azelplotflag == False:
             azelplotflag = True
-            b.configure(text="Stop", bg="red", fg='black')
+            b1.configure(text="Stop", bg="red", fg='black')
         else:
             azelplotflag = False
-            b.configure(text="Start", bg="green", fg='black')
+            b1.configure(text="Start", bg="green", fg='black')
         threading.Thread(target=azelplot).start() #Start new process to plot
     # Start/stop plotting button
-    b = Button(bl, text="Start", command=azel_handler, bg="green", fg='black')
+    b1 = Button(b, text="Start", command=azel_handler, bg="green", fg='black')
 
     ##### Top Right Frame - FFT Plot
     # Input for Desired Frequency
-    cf = Label(tr, text="Center Frequency [MHz]:")
-    centerfreq = StringVar()
-    freqentry = Entry(tr, textvariable=centerfreq)
-    centerfreq.set("2250")
+    #cf = Label(tr, text="Center Frequency [MHz]:")
+    #centerfreq = StringVar()
+    #freqentry = Entry(tr, textvariable=centerfreq)
+    #centerfreq.set("2250")
     
     # FFT Plot figure creation
-    fig2 = Figure()
-    ax2 = fig2.add_subplot(111)
-    ax2.set_xlabel("Frequency [MHz]")
-    ax2.set_title("Signal Frequency Distribution")
-    ax2.set_xlim(2000, 2500)
-    ax2.set_ylim(0,10)
-    ax2.grid()
-    graph2 = FigureCanvasTkAgg(fig2, master=tr)
+    #fig2 = Figure()
+    #ax2 = fig2.add_subplot(111)
+    #ax2.set_xlabel("Frequency [MHz]")
+    #ax2.set_title("Signal Frequency Distribution")
+    #ax2.set_xlim(2000, 2500)
+    #ax2.set_ylim(0,10)
+    #ax2.grid()
+    #graph2 = FigureCanvasTkAgg(fig2, master=tr)
     
     # Plot fft points
     def fftplot():
@@ -376,13 +395,13 @@ def main():
             b2.configure(text="Start", bg="green", fg='black')
         threading.Thread(target=fftplot).start() #Start new plotting process
     
-    # Start/Stop Plotting button
-    b2 = Button(tr, text="Start", command=fft_handler, bg="green", fg='black')
+    # Start/Stop Plotting button 
+    #b2 = Button(tr, text="Start", command=fft_handler, bg="green", fg='black')
     
     # Bottom Right Frame - Future Passes
     degree_sign= u'\N{DEGREE SIGN}'
     starttime, endtime, startaz, endaz, maxel, locname, satname = nextpass(str(tleloc.get()), str(qthloc.get()))
-    np_l = Label(br, text="Upcoming Passes for "+str(satname)+" over "+str(locname)+":\n"+
+    np_l = Label(t1b, text="Upcoming Passes for "+str(satname)+" over "+str(locname)+":\n"+
         "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+
         str(round(startaz[0],2))+degree_sign+"\nFinish: "+endtime[0]+
         ", Azimuth: "+str(round(endaz[0],2))+degree_sign+
@@ -414,23 +433,26 @@ def main():
             "\nMaximum Elevation: "+str(round(maxel[2],2))+degree_sign)
     
     # Button for recalculation of future passes
-    np_button = Button(br, text="Recalculate", command=recalculate, bg="blue", fg="black")
+    np_button = Button(t1b, text="Recalculate", command=recalculate, bg="blue", fg="black")
     
     # Pack Frames
-    left.pack(side="left", expand=True, fill="both")
-    right.pack(side="right", expand=True, fill="both")
-    tl.pack(expand=True, fill="both", padx=10, pady=10)
-    tl1.pack(side="left", expand=True, fill="both", padx=10, pady=10)
-    tl2.pack(side="right",expand=True, fill="both", padx=10, pady=10)
-    tr.pack(expand=True, fill="both", padx=10, pady=10)
-    bl.pack(expand=True, fill="both", padx=10, pady=10)
-    br.pack(expand=True, fill="both", padx=10, pady=10)
+    #left.pack(side="left", expand=True, fill="both")
+    #right.pack(side="right", expand=True, fill="both")
+    t.pack(side='top', expand=True, fill="both", padx=10, pady=10)
+    t1.pack(side="left", expand=True, fill="both", padx=10, pady=10)
+    t2.pack(side="right",expand=True, fill="both", padx=10, pady=10)
+    t1t.pack(side='top', expand=True, fill="both", padx=10, pady=10)
+    t1b.pack(side='bottom', expand=True, fill="both", padx=10, pady=10)
+    #tr.pack(expand=True, fill="both", padx=10, pady=10)
+    b.pack(side="bottom", expand=True, fill="both", padx=10, pady=10)
+    #br.pack(expand=True, fill="both", padx=10, pady=10)
     
     # Pack everything else into frames
-    exitbutton.pack(side="top")
-    logo.pack(side="top")
-    descrip.pack(side="top")
-    cbutton.pack(side="top")
+    exitbutton.pack(side="left")
+    #logo.pack(side="top")
+    cbutton.pack(side="left")
+    logo.pack(side="left")
+    descrip.pack(side="left")
     pointlabel.pack(side="top")
     R1.pack(side="top")
     R2.pack(side="top")
@@ -438,22 +460,22 @@ def main():
     b_down.pack(side="top")
     b_left.pack(side="top")
     b_right.pack(side="top")
-    azellabel.pack(side="bottom")
-    b_azelinput.pack(side="bottom")
-    elentry.pack(side="bottom")
-    ellabel.pack(side="bottom")
-    azentry.pack(side="bottom")
-    azlabel.pack(side="bottom")
+    azlabel.pack(side="top")
+    azentry.pack(side="top")
+    ellabel.pack(side="top")
+    elentry.pack(side="top")
+    b_azelinput.pack(side="top")
+    azellabel.pack(side="top")
     graph.get_tk_widget().pack(side="bottom",fill='both', expand=True)
-    b.pack(side='left')
+    b1.pack(side='left')
     qth.pack(side="left")
     qthentry.pack(side="left")
     tle.pack(side="left")
     tleentry.pack(side="left")
-    graph2.get_tk_widget().pack(side="bottom",fill='both', expand=True)
-    b2.pack(side='left')
-    cf.pack(side="left")
-    freqentry.pack(side="left")
+    #graph2.get_tk_widget().pack(side="bottom",fill='both', expand=True)
+    #b2.pack(side='left')
+    #cf.pack(side="left")
+    #freqentry.pack(side="left")
     np_l.pack(side="top")
     np_button.pack(side="top")
     

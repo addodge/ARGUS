@@ -5,17 +5,26 @@
 # Date Created: 10/24/2018
 # Date Modified: 1/22/2019
 ##############################################################################################
-# Necessary Modules
+# Description / Notes:
+
+# This file creates a GUI for controlling the ARGUS ground station tracking ability. Currently
+# it is able to track the satellite and show the tracking in the GUI. The next steps are to 
+# add the motor control functions and figure out how exactly it will track over a path when the 
+# controller only takes in position commands, as well as to implement the GPS receiver to take
+# in the latitude and longitude of the ground station. 
+
+# IMPORTANT: I do not recommend using anaconda python for this GUI. The font looks terrible and
+# the sizing is way off because of the bad font. It is better to use the system python 3 and 
+# make sure that matplotlib is version 2.2.3 because there is an issue with a segmentation fault
+# on self.graph.draw() when using matplotlib 3.0.1. 
+##############################################################################################
+### Necessary Modules
 import numpy as np
 from tkinter import *
 from PIL import ImageTk, Image
-### NEED MATPLOTLIB 2.2.3 NOT 3.0.1
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-import time, threading, unittest, os
-from random import random, randint
-import multiprocessing as mp
-import urllib.request as urllib2
+import time, threading, os
 from copy import copy
 from cpredict import quick_find, quick_predict, PredictException
 import ephem
@@ -65,10 +74,7 @@ class GUI:
         self.exitbutton = Button(self.t1t, text="QUIT", bg="red", fg="black",
                                                         command=self.t1.quit)
         # Logo
-        #self.logo = Label(self.t1t, image=ImageTk.PhotoImage(Image.open("ARGUS_Logo.png").
-        #                                                resize((80,80), Image.ANTIALIAS)))
-        img = Image.open("ARGUS_Logo.png").resize((100,100), Image.ANTIALIAS)
-        img = ImageTk.PhotoImage(img)
+        img = ImageTk.PhotoImage(Image.open("ARGUS_Logo.png").resize((80,80), Image.ANTIALIAS))
         self.logo = Label(self.t1t, image=img)
         self.logo.image = img
         

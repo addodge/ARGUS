@@ -16,23 +16,20 @@ Tyler Murphy, Stuart Penkowsky, Michael Tzimourakas
   - numpy
   - tkinter
   - PIL
-  - matplotlib
+  - matplotlib==2.2.3
   - ephem
 
 ### Setup:
 
 ```
-sudo python setup.py install 
-cp build/lib.*string relating to operating system*/cpredict.*string relating to operating system*.so .
-mv cpredict.*string relating to operating system*.so cpredict.so
+sudo python3 setup.py install 
 ```
-__Note:__ change `*string relating to operating system*` to the actual directory/file names in your folder.
 
 ### Usage:
 
 ```./argus.py```
 
-__Note:__ python3 must be in /usr/bin/python3.
+__Note:__ python3 version must be in /usr/bin/env python3.
 
 __Note 2:__ QTH file in Location Name, Latitude (N), Longitude (E), Elevation (meters) format
 

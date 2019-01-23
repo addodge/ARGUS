@@ -1,492 +1,605 @@
 #!/usr/bin/env python3
-################################################################
+##############################################################################################
 # Adam Dodge
 # ARGUS Ground Station GUI
 # Date Created: 10/24/2018
-################################################################
+# Date Modified: 1/22/2019
+##############################################################################################
 # Necessary Modules
 import numpy as np
 from tkinter import *
 from PIL import ImageTk, Image
+### NEED MATPLOTLIB 2.2.3 NOT 3.0.1
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import time, threading, unittest, os
 from random import random, randint
 import multiprocessing as mp
-import predict
+import urllib.request as urllib2
+from copy import copy
 from cpredict import quick_find, quick_predict, PredictException
 import ephem
 
-# Globals
-azelplotflag = False # True if plot is active
-fftplotflag = False # True if plot is active
-manflag = True # True if in manual mode
-progflag = False # True if in program track mode
-currentAz = 0 # Current Pointing azimuth
-currentEl = 0 # Current Pointing Elevation
-step = 0.1 #step movement for antenna
-################################################################
-# Load latitude, longitude, elevation
-def load_qth(qthfile):
-    try:
-        with open(qthfile, 'r') as myfile:
-            qth = myfile.readlines()
-    except IOError:
-        print('Error Reading '+qthfile+". Exiting.")
-        os._exit(1)
-    qth = list(map(lambda s: s.strip(), qth))
-    locname = qth[0]
-    qth = predict.massage_qth(tuple(qth[1:])) #use predict.py to change variable types
-    qth = (qth[0], -qth[1], qth[2])
-    return qth, locname
-
-# Load orbital elements 
-def load_tle(tlefile):
-    try:
-        with open(tlefile, 'r') as myfile:
-            tle = myfile.read()
-    except IOError:
-        print('Error Reading '+tlefile+". Exiting.")
-        os._exit(1)
-    tle = predict.massage_tle(tle) #use predict.py to separate elements
-    satname = tle[0]
-    return tle, satname
+class GUI:
+    """ This is a class for creating the GUI for the ARGUS ground station. """
+##############################################################################################
+    # Define initialization Function
+    def __init__(self):
+        """ Function to initialize GUI. """
+        self.azelplotflag = False # True if plot is active
+        self.manflag = True # True if in manual mode
+        self.progflag = False # True if in program track mode
+        self.currentAz = 0 # Current Pointing azimuth
+        self.currentEl = 0 # Current Pointing Elevation
+        self.step = 0.1 #step movement for antenna
+        self.degree_sign= u'\N{DEGREE SIGN}'
+        self.buildGUI()
+    
+##############################################################################################
+    # Define function to build the GUI
+    def buildGUI(self):
+        """ Function to build GUI. """
+        ##### Build root and frames
+        self.root = Tk()
+        self.root.title("ARGUS Ground Station")
+        #root.attributes("-fullscreen", True)
+        self.root.configure(background='grey')
+        self.root.tk.call('wm', 'iconphoto', self.root._w, PhotoImage(file='ARGUS_Logo.gif'))
+        self.root.option_add('*Font', 'fixed')
+        self.t = Frame(self.root, borderwidth=2, relief="solid") #Top
+        self.t1 = Frame(self.t, borderwidth=2, relief="solid") #Top left
+        self.t2 = Frame(self.t, borderwidth=2, relief="solid") #Top Right
+        self.t1t = Frame(self.t1, borderwidth=2, relief="solid") #Top left top
+        self.t1b = Frame(self.t1, borderwidth=2, relief="solid") #Top left bottom
+        self.b = Frame(self.root, borderwidth=2, relief="solid") #Bottom
         
-# Produce Azimuth and Elevation using Predict
-def azel_points(tlefile, qthfile):
-    qth, locname = load_qth(qthfile)
-    tle, satname = load_tle(tlefile)
-    data = predict.observe(tle, qth) #find current state
-    return data['azimuth'], data['elevation'], locname, satname
-
-################################################################    
-# Produce FFT points - THIS NEEDS TO BE CHANGED TO ACTUAL FFT
-def fft_points(cf):
-    # This is random for now, eventually need actual signal calculation
-    freq = np.sort(np.random.rand(10) * 20000000 + cf - 10000000)
-    mag = np.random.rand(10) * 10
-    return freq, mag
-
-################################################################
-# Convert degrees.decimal to degrees:minutes:seconds.decimal string
-def intdeg2dms(deg):
-    d = int(deg)
-    md = abs(deg - d) * 60
-    m = int(md)
-    sd = (md - m) * 60
-    return '%d:%d:%f' % (d, m, sd)
-
-################################################################
-# Calibrate az/el - THIS NEEDS TO ACTUALLY AUTOTRACK
-def calibrate(qthfile):
-    global currentAz, currentEl
-    print("Calibrating...")
-    qth, _ = load_qth(qthfile)
-    observer = ephem.Observer()
-    observer.lat = intdeg2dms(qth[0])
-    observer.lon = intdeg2dms(-qth[1])
-    observer.elevation = qth[2]
-
-    # Track Sun to determine azimuth and elevation
-    sun = ephem.Sun()
-    sun.compute(observer)
-    if sun.alt<0:
-        print("Sun not visible, Calibration not possible. Exiting.")
-        os._exit(1)
-    # Assume pointing close enough to the sun to get a signal
-    # !!!!! Autotrack to find the center of the sun !!!!!!!
-    
-    
-    # Set current Az/El to this azimuth and elevation
-    currentAz, currentEl = sun.az*180/np.pi, sun.alt*180/np.pi
-    print("Done.")
-
-def findsun(qthfile):
-    qth, _ = load_qth(qthfile)
-    observer = ephem.Observer()
-    observer.lat = intdeg2dms(qth[0])
-    observer.lon = intdeg2dms(-qth[1])
-    observer.elevation = qth[2]
-    sun = ephem.Sun()
-    sun.compute(observer)
-    sunAz, sunEl = sun.az*180/np.pi, sun.alt*180/np.pi
-    return sunAz, sunEl
-    
-# Determine Next Pass timing and azimuth of start and finish time/azimuth
-def nextpass(tlefile, qthfile):
-    qth, locname = load_qth(qthfile) #load qth
-    tle, satname = load_tle(tlefile) # load tle
-    p = predict.transits(tle, qth) # predict future passes
-    starttime, endtime, startaz, endaz, maxel = ([] for i in range(5)) #initialize
-    for i in range(3): # Predict 3 passes
-        transit = next(p) #Find next pass
-        starttime.append(time.ctime(transit.start))
-        endtime.append(time.ctime(transit.end))
-        startaz.append(predict.observe(tle, qth, transit.start)['azimuth'])
-        endaz.append(predict.observe(tle, qth, transit.end)['azimuth'])
-        maxel.append(transit.peak()['elevation'])
-    return starttime, endtime, startaz, endaz, maxel, locname, satname
-
-################################################################
-# Functions for changing the azimuth and elevation
-def increase_elevation():
-    global manflag, currentEl, step
-    if manflag:
-        if currentEl+step <= 90:
-            currentEl = currentEl + step
-        else:
-            currentEl=90
-
-def decrease_elevation():
-    global manflag, currentEl, step
-    if manflag:
-        if currentEl-step >= 0:
-            currentEl = currentEl - step
-        else:
-            currentEl=0
+        self.qthloc = StringVar()
+        self.tleloc = StringVar()
+        self.trackMode = IntVar()
+        self.trackMode.set(1)
+        self.azinput = StringVar()
+        self.elinput = StringVar()
         
-
-def increase_azimuth():
-    global manflag, currentAz, step
-    if manflag:
-        if currentAz+step >= 360:
-            currentAz = currentAz + step - 360
-        else:
-            currentAz = currentAz + step
-
-def decrease_azimuth():
-    global manflag, currentAz, step
-    if manflag:
-        if currentAz-step < 0:
-            currentAz = currentAz - step + 360
-        else:
-            currentAz = currentAz - step
-
-################################################################
-# Define Arrow Presses for Manual Mode
-def uppress(event):
-    increase_elevation()
-
-def downpress(event):
-    decrease_elevation()
-
-def rightpress(event):
-    increase_azimuth()
-
-def leftpress(event):
-    decrease_azimuth()
-
-################################################################
-def main():
-    global azelplotflag, fftplotflag, manflag, progflag, autoflag, currentAz, currentEl
-    ###### Create root GUI
-    root = Tk()
-    root.title("ARGUS Ground Station")
-    #root.attributes("-fullscreen", True)
-    root.configure(background='grey')
-    img = PhotoImage(file='ARGUS_Logo.gif')
-    root.tk.call('wm', 'iconphoto', root._w, img)
-    root.option_add('*Font', 'fixed')
-    qthloc = StringVar()
-    tleloc = StringVar()
-    
-    # Create Frames
-    #left = Frame(root, borderwidth=2, relief="solid") #Split in half
-    #right = Frame(root, borderwidth=2, relief="solid")
-    t = Frame(root, borderwidth=2, relief="solid") #Top
-    t1 = Frame(t, borderwidth=2, relief="solid") #Top left
-    t2 = Frame(t, borderwidth=2, relief="solid") #Top Right
-    t1t = Frame(t1, borderwidth=2, relief="solid") #Top left top
-    t1b = Frame(t1, borderwidth=2, relief="solid") #Top left bottom
-    #tr = Frame(right, borderwidth=2, relief="solid") #Top Right
-    b = Frame(root, borderwidth=2, relief="solid") #Bottom Left
-    #br = Frame(right, borderwidth=2, relief="solid") #Bottom Right
-    
-    ##### Top Left Frame - exit, logo, description
-    # exit button
-    exitbutton = Button(t1t, text="QUIT", bg="red", fg="black", command=t1.quit)
-    
-    # logo
-    img = Image.open("ARGUS_Logo.png").resize((80,80), Image.ANTIALIAS)
-    img = ImageTk.PhotoImage(img)
-    logo = Label(t1t, image=img)
-    #image = img
-    
-    # GUI Description
-    descrip = Label(t1t, text="ARGUS\nTracking\nGUI") 
-    
-    # Calibrate Button
-    def call_calibrate():
-        calibrate(str(qthloc.get()))   
+        ##### Top Left Frame - exit, logo, description
+        # exit button
+        self.exitbutton = Button(self.t1t, text="QUIT", bg="red", fg="black",
+                                                        command=self.t1.quit)
+        # Logo
+        #self.logo = Label(self.t1t, image=ImageTk.PhotoImage(Image.open("ARGUS_Logo.png").
+        #                                                resize((80,80), Image.ANTIALIAS)))
+        img = Image.open("ARGUS_Logo.png").resize((100,100), Image.ANTIALIAS)
+        img = ImageTk.PhotoImage(img)
+        self.logo = Label(self.t1t, image=img)
+        self.logo.image = img
         
-    cbutton = Button(t1t, text="Calibrate", bg="blue", fg="black", command=call_calibrate)
-    
-    ##### Pointing Frame
-
-    # Functions for switching modes
-    def go_program():
-        global manflag, progflag, autoflag
-        progflag=True
-        manflag=False
-    def go_manual():
-        global manflag, progflag, autoflag
-        progflag=False
-        manflag=True
-    
-    # Create Radio Buttons for mode selection
-    var = IntVar()
-    var.set(1)
-    R1 = Radiobutton(t2, text="Manual Mode", variable=var, value=1, command=go_manual)
-    R2 = Radiobutton(t2, text="Program Track", variable=var, value=2, command=go_program)
+        # GUI Description
+        self.descrip = Label(self.t1t, text="ARGUS\nTracking\nGUI") 
+        # Calibrate Button
+        self.cbutton = Button(self.t1t, text="Calibrate", bg="green", fg="black",
+                                                    command=self.call_calibrate)
         
-    # Create antenna motion buttons, map arrow keys to same functions
-    b_up = Button(t2, text="+El "+'\u25b2', bg="white", fg="black", command=increase_elevation)
-    root.bind('<Up>', uppress)
-    b_down = Button(t2, text="-El "+'\u25BC', bg="white", fg="black", command=decrease_elevation)
-    root.bind('<Down>', downpress)
-    b_left = Button(t2, text="+Az "+'\u25B6', bg="white", fg="black", command=increase_azimuth)
-    root.bind('<Left>', leftpress)
-    b_right = Button(t2, text="-Az "+'\u25C0', bg="white", fg="black", command=decrease_azimuth)
-    root.bind('<Right>', rightpress)
+        ##### Pointing Frame
+        # Track Mode buttons
+        self.R1 = Radiobutton(self.t2, text="Manual Mode", variable=self.trackMode, 
+                                                   value=1, command=self.go_manual)
+        self.R2 = Radiobutton(self.t2, text="Program Track", variable=self.trackMode,
+                                                    value=2, command=self.go_program)
+        # Create antenna motion buttons, map arrow keys to same functions
+        self.b_up = Button(self.t2, text="+El "+'\u25b2', bg="white", fg="black",
+                                                 command=self.increase_elevation)
+        self.root.bind('<Up>', self.uppress)
+        self.b_down = Button(self.t2, text="-El "+'\u25BC', bg="white", fg="black", 
+                                              command=self.decrease_elevation)
+        self.root.bind('<Down>', self.downpress)
+        self.b_left = Button(self.t2, text="+Az "+'\u25B6', bg="white", fg="black", 
+                                                command=self.increase_azimuth)
+        self.root.bind('<Left>', self.leftpress)
+        self.b_right = Button(self.t2, text="-Az "+'\u25C0', bg="white", fg="black", 
+                                                 command=self.decrease_azimuth)
+        self.root.bind('<Right>', self.rightpress)
+        # Value inputs
+        self.azlabel = Label(self.t2, text="Input Azimuth: ")
+        self.ellabel = Label(self.t2, text="Input Elevation: ")
+        self.azentry = Entry(self.t2, textvariable=self.azinput)
+        self.elentry = Entry(self.t2, textvariable=self.elinput)
+        self.azinput.set(str(round(self.currentAz, 2)))
+        self.elinput.set(str(round(self.currentEl, 2)))
+        self.b_azelinput = Button(self.t2, text="Set Az/El", bg="white", fg="black",
+                             command=self.set_azel)
+        self.azellabel = Label(self.t2, text="Current Azimuth: %3.2f, Current Elevation: %3.2f" %
+                                                                (self.currentAz, self.currentEl))
+        self.pointlabel = Label(self.t2, text="Antenna Pointing:")
+        
+        #### Bottom Left Frame - Azimuth/Elevation Plot
+        # QTH file input
+        self.qth = Label(self.b, text="QTH File:")
+        self.qthentry = Entry(self.b, textvariable=self.qthloc)
+        self.qthloc.set("Boulder.qth")
+        
+        # TLE file input
+        self.tle = Label(self.b, text="TLE File:")
+        self.tleentry = Entry(self.b, textvariable=self.tleloc)
+        self.tleloc.set("MTI.tle")
+        
+        # Az/El Plot figure creation
+        self.fig = Figure()
+        self.ax = self.fig.add_subplot(111, projection='polar')
+        _, _, locname, satname = self.azel_points(str(self.tleloc.get()), str(self.qthloc.get()))
+        self.ax.set_title("Azimuth and Elevation of "+satname+" over "+locname)
+        self.ax.grid(True)
+        self.ax.set_rlim(90, 0, 1)
+        self.ax.set_yticks(np.arange(0, 91, 10))
+        self.ax.set_yticklabels(self.ax.get_yticks()[::-1])
+        self.ax.invert_yaxis()
+        self.ax.set_theta_zero_location("N")
+        self.ax.set_theta_direction(-1)
+        self.graph = FigureCanvasTkAgg(self.fig, master=self.b)
+        
+        # Start/stop plotting button
+        self.b1 = Button(self.b, text="Start", command=self.azel_handler, bg="green", fg='black')
+        
+        starttime, endtime, startaz, endaz, maxel, locname, satname = \
+                self.nextpass(str(self.tleloc.get()), str(self.qthloc.get()))
+        self.np_l = Label(self.t1b, text = \
+                "Upcoming Passes for "+str(satname)+" over "+str(locname)+":\n"+
+                "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+
+                str(round(startaz[0],2))+self.degree_sign+"\nFinish: "+endtime[0]+
+                ", Azimuth: "+str(round(endaz[0],2))+self.degree_sign+
+                "\nMaximum Elevation: "+str(round(maxel[0],2))+self.degree_sign+
+                "\nPass 2:\nStart: "+starttime[1]+", Azimuth: "+
+                str(round(startaz[1],2))+self.degree_sign+"\nFinish: "+endtime[1]+
+                ", Azimuth: "+str(round(endaz[1],2))+self.degree_sign+
+                "\nMaximum Elevation: "+str(round(maxel[1],2))+self.degree_sign+
+                "\nPass 3:\nStart: "+starttime[2]+", Azimuth: "+
+                str(round(startaz[2],2))+self.degree_sign+"\nFinish: "+endtime[2]+
+                ", Azimuth: "+str(round(endaz[2],2))+self.degree_sign+
+                "\nMaximum Elevation: "+str(round(maxel[2],2))+self.degree_sign)
+        
+        # Button for recalculation of future passes
+        self.np_button = Button(self.t1b, text="Recalculate", command=self.recalculate, 
+                                                            bg="blue", fg="black")
+        
+        # Pack Frames
+        self.t.pack(side='top', expand=True, fill="both", padx=10, pady=10)
+        self.t1.pack(side="left", expand=True, fill="both", padx=10, pady=10)
+        self.t2.pack(side="right",expand=True, fill="both", padx=10, pady=10)
+        self.t1t.pack(side='top', expand=True, fill="both", padx=10, pady=10)
+        self.t1b.pack(side='bottom', expand=True, fill="both", padx=10, pady=10)
+        self.b.pack(side="bottom", expand=True, fill="both", padx=10, pady=10)
+        
+        # Pack everything else into frames
+        self.exitbutton.pack(side="left")
+        self.cbutton.pack(side="left")
+        self.logo.pack(side="left")
+        self.descrip.pack(side="left")
+        self.pointlabel.pack(side="top")
+        self.R1.pack(side="top")
+        self.R2.pack(side="top")
+        self.b_up.pack(side="top")
+        self.b_down.pack(side="top")
+        self.b_left.pack(side="top")
+        self.b_right.pack(side="top")
+        self.azlabel.pack(side="top")
+        self.azentry.pack(side="top")
+        self.ellabel.pack(side="top")
+        self.elentry.pack(side="top")
+        self.b_azelinput.pack(side="top")
+        self.azellabel.pack(side="top")
+        self.graph.get_tk_widget().pack(side="bottom",fill='both', expand=True)
+        self.b1.pack(side='left')
+        self.qth.pack(side="left")
+        self.qthentry.pack(side="left")
+        self.tle.pack(side="left")
+        self.tleentry.pack(side="left")
+        self.np_l.pack(side="top")
+        self.np_button.pack(side="top")
+
+##############################################################################################
+    # Define Functions for azimuth and elevation plotting
+    def azelplot(self):
+        """ Function to Plot Azimuth and Elevation. """
+        qthfile = str(self.qthloc.get())
+        tlefile = str(self.tleloc.get())
+        while self.azelplotflag:
+            self.ax.cla()
+            self.ax.grid(True)
+            self.ax.set_rlim(90, 0, 1)
+            self.ax.set_yticks(np.arange(0, 91, 10))
+            self.ax.set_yticklabels(self.ax.get_yticks()[::-1])
+            self.ax.invert_yaxis()
+            self.ax.set_theta_zero_location("N")
+            self.ax.set_theta_direction(-1)
+            az, el, locname, satname = self.azel_points(tlefile, qthfile)
+            sunAz, sunEl = self.findsun(qthfile)
+            self.ax.set_title("Azimuth and Elevation of "+satname+" over "+locname)
+            self.ax.scatter(az*np.pi/180, 90-el, marker='o', color='blue', label=satname)
+            self.ax.scatter(sunAz*np.pi/180, 90-sunEl, marker='o', color='orange', label='Sun')
+            self.ax.legend()
+            #print("a")
+            self.graph.draw()
+            #print("b")
+            time.sleep(0.2)
+            if self.progflag:
+                self.currentAz = az
+                if el>0:
+                    self.currentEl = el
+                else:
+                    self.currentEl = 0
     
-    # Show azimuth and elevation, allow for input
-    def set_azel():
-        global currentAz, currentEl, manflag
-        if manflag:
-            azinput_val = float(str(azinput.get()))
-            elinput_val = float(str(elinput.get()))
+    def azel_handler(self):
+        """ Function to Spawn Azimuth and Elevation process, switch state. """
+        if self.azelplotflag == False:
+            self.azelplotflag = True
+            self.b1.configure(text="Stop", bg="red", fg='black')
+        else:
+            self.azelplotflag = False
+            self.b1.configure(text="Start", bg="green", fg='black')
+        threading.Thread(target=self.azelplot).start() #Start new process to plot
+        
+    def azel_points(self, tlefile, qthfile):
+        """ Function to Produce Azimuth and Elevation using Predict. """
+        qth, locname = self.load_qth(qthfile)
+        tle, satname = self.load_tle(tlefile)
+        data = observe(tle, qth) #find current state
+        return data['azimuth'], data['elevation'], locname, satname
+    
+##############################################################################################
+    # Define Functions to set the azimuth and elevation along with the labels
+    def set_azel_label(self):
+        """ Function to set Azimuth and Elevation Label on GUI. """
+        self.azellabel['text'] = "Current Azimuth: %3.2f, Current Elevation: %3.2f" % \
+                                                (self.currentAz, self.currentEl)
+        self.root.after(1, self.set_azel_label)
+    
+    def set_azel(self):
+        """ Function to set azimuth and elevation from input. """
+        if self.manflag:
+            azinput_val = float(str(self.azinput.get()))
+            elinput_val = float(str(self.elinput.get()))
             if elinput_val > 90:
-                currentEl = 90
+                self.currentEl = 90
             elif elinput_val < 0:
-                currentEl = 0
+                self.currentEl = 0
             else:
-                currentEl = elinput_val
+                self.currentEl = elinput_val
             while azinput_val > 360:
                 azinput_val = azinput_val-360
             while azinput_val < 0:
                 azinput_val = azinput_val+360
-            currentAz = azinput_val
-            azinput.set(str(round(currentAz, 2)))
-            elinput.set(str(round(currentEl, 2)))
+            self.currentAz = azinput_val
+            self.azinput.set(str(round(currentAz, 2)))
+            self.elinput.set(str(round(currentEl, 2)))
     
-    azlabel = Label(t2, text="Input Azimuth: ")
-    ellabel = Label(t2, text="Input Elevation: ")
-    azinput = StringVar()
-    elinput = StringVar()
-    azentry = Entry(t2, textvariable=azinput)
-    elentry = Entry(t2, textvariable=elinput)
-    azinput.set(str(round(currentAz, 2)))
-    elinput.set(str(round(currentEl, 2)))
-    b_azelinput = Button(t2, text="Set Az/El", bg="white", fg="black", command=set_azel)
-    azellabel = Label(t2, text="Current Azimuth: %3.2f, Current Elevation: %3.2f" % (currentAz, currentEl))
-    pointlabel = Label(t2, text="Antenna Pointing:")
+##############################################################################################
+    # Define Functions to switch mode
+    def go_program(self):
+        """ Function for switching to program tracking mode. """
+        self.progflag=True
+        self.manflag=False
+        
+    def go_manual(self):
+        """ Function for switching to manual tracking mode. """
+        self.progflag=False
+        self.manflag=True
     
-    def set_azel_label():
+##############################################################################################
+    # Define Functions to load tle and qth files
+    def load_qth(self, qthfile):
+        """ Function to Load latitude, longitude, elevation from given file. """
+        try:
+            with open(qthfile, 'r') as myfile:
+                qth = myfile.readlines()
+        except IOError:
+            print('Error Reading '+qthfile+". Exiting.")
+            os._exit(1)
+        qth = list(map(lambda s: s.strip(), qth))
+        locname = qth[0]
+        qth = massage_qth(tuple(qth[1:])) #use predict.py to change variable types
+        qth = (qth[0], -qth[1], qth[2])
+        return qth, locname
+    
+    def load_tle(self, tlefile):
+        """ Function to Load orbital elements. """
+        try:
+            with open(tlefile, 'r') as myfile:
+                tle = myfile.read()
+        except IOError:
+            print('Error Reading '+tlefile+". Exiting.")
+            os._exit(1)
+        tle = massage_tle(tle) #use predict.py to separate elements
+        satname = tle[0]
+        return tle, satname
+    
+##############################################################################################
+    # Define Calibration Functions
+    def call_calibrate(self):
+        """ Function to call the calibrate function. """
+        self.calibrate(str(self.qthloc.get()))
+        
+    def calibrate(self, qthfile):
+        """ Fuction to Calibrate Pointing angles using the Sun. """
         global currentAz, currentEl
-        azellabel['text'] = "Current Azimuth: %3.2f, Current Elevation: %3.2f" % (currentAz, currentEl)
-        root.after(1, set_azel_label)
-    
-    #### Bottom Left Frame - Azimuth/Elevation Plot
-    # QTH file input
-    qth = Label(b, text="QTH File:")
-    qthentry = Entry(b, textvariable=qthloc)
-    qthloc.set("Boulder.qth")
-    
-    # TLE file input
-    tle = Label(b, text="TLE File:")
-    tleentry = Entry(b, textvariable=tleloc)
-    tleloc.set("MTI.tle")
-    
-    # Az/El Plot figure creation
-    fig = Figure()
-    ax = fig.add_subplot(111, projection='polar')
-    _, _, locname, satname = azel_points(str(tleloc.get()), str(qthloc.get()))
-    ax.set_title("Azimuth and Elevation of "+satname+" over "+locname)
-    ax.grid(True)
-    ax.set_rlim(90, 0, 1)
-    ax.set_yticks(np.arange(0, 91, 10))
-    ax.set_yticklabels(ax.get_yticks()[::-1])
-    ax.invert_yaxis()
-    ax.set_theta_zero_location("N")
-    ax.set_theta_direction(-1)
-    graph = FigureCanvasTkAgg(fig, master=b)
-    
-    # Function to Plot Azimuth and Elevation
-    def azelplot():
-        global azelplotflag, progflag, currentAz, currentEl
-        qthfile = str(qthloc.get())
-        tlefile = str(tleloc.get())
-        while azelplotflag:
-            ax.cla()
-            ax.grid(True)
-            ax.set_rlim(90, 0, 1)
-            ax.set_yticks(np.arange(0, 91, 10))
-            ax.set_yticklabels(ax.get_yticks()[::-1])
-            ax.invert_yaxis()
-            ax.set_theta_zero_location("N")
-            ax.set_theta_direction(-1)
-            az, el, locname, satname = azel_points(tlefile, qthfile)
-            sunAz, sunEl = findsun(qthfile)
-            ax.set_title("Azimuth and Elevation of "+satname+" over "+locname)
-            ax.scatter(az*np.pi/180, 90-el, marker='o', color='blue', label=satname)
-            ax.scatter(sunAz*np.pi/180, 90-sunEl, marker='o', color='orange', label='Sun')
-            ax.legend()
-            graph.draw()
-            time.sleep(0.2)
-            if progflag:
-                currentAz = az
-                if el>0:
-                    currentEl = el
-                else:
-                    currentEl = 0
-    
-    # Spawn Azimuth and Elevation process, switch state
-    def azel_handler():
-        global azelplotflag
-        if azelplotflag == False:
-            azelplotflag = True
-            b1.configure(text="Stop", bg="red", fg='black')
-        else:
-            azelplotflag = False
-            b1.configure(text="Start", bg="green", fg='black')
-        threading.Thread(target=azelplot).start() #Start new process to plot
-    # Start/stop plotting button
-    b1 = Button(b, text="Start", command=azel_handler, bg="green", fg='black')
+        print("Calibrating...")
+        qth, _ = self.load_qth(qthfile)
+        observer = ephem.Observer()
+        observer.lat = self.intdeg2dms(qth[0])
+        observer.lon = self.intdeg2dms(-qth[1])
+        observer.elevation = qth[2]
 
-    ##### Top Right Frame - FFT Plot
-    # Input for Desired Frequency
-    #cf = Label(tr, text="Center Frequency [MHz]:")
-    #centerfreq = StringVar()
-    #freqentry = Entry(tr, textvariable=centerfreq)
-    #centerfreq.set("2250")
+        # Track Sun to determine azimuth and elevation
+        sun = ephem.Sun()
+        sun.compute(observer)
+        if sun.alt<0:
+            print("Sun not visible, Calibration not possible. Exiting.")
+            os._exit(1)
+        # Assume pointing close enough to the sun to get a signal
+        
+        # Set current Az/El to this azimuth and elevation
+        currentAz, currentEl = sun.az*180/np.pi, sun.alt*180/np.pi
+        print("Done.")
     
-    # FFT Plot figure creation
-    #fig2 = Figure()
-    #ax2 = fig2.add_subplot(111)
-    #ax2.set_xlabel("Frequency [MHz]")
-    #ax2.set_title("Signal Frequency Distribution")
-    #ax2.set_xlim(2000, 2500)
-    #ax2.set_ylim(0,10)
-    #ax2.grid()
-    #graph2 = FigureCanvasTkAgg(fig2, master=tr)
+##############################################################################################
+    # Define Functions for finding sun
+    def findsun(self, qthfile):
+        """ Function to find the Sun for plotting. """
+        qth, _ = self.load_qth(qthfile)
+        observer = ephem.Observer()
+        observer.lat = self.intdeg2dms(qth[0])
+        observer.lon = self.intdeg2dms(-qth[1])
+        observer.elevation = qth[2]
+        sun = ephem.Sun()
+        sun.compute(observer)
+        sunAz, sunEl = sun.az*180/np.pi, sun.alt*180/np.pi
+        return sunAz, sunEl
+        
+    def recalculate(self):
+        """ Function to recalculate future passes if new TLE loaded. """
+        starttime, endtime, startaz, endaz, maxel, locname, satname = \
+                 self.nextpass(str(self.tleloc.get()), str(self.qthloc.get()))
+        self.np_l.configure(text = \
+                "Upcoming Passes for "+str(satname)+" over "+str(locname)+":\n"+
+                "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+
+                str(round(startaz[0],2))+self.degree_sign+"\nFinish: "+endtime[0]+
+                ", Azimuth: "+str(round(endaz[0],2))+self.degree_sign+
+                "\nMaximum Elevation: "+str(round(maxel[0],2))+self.degree_sign+
+                "\nPass 2:\nStart: "+starttime[1]+", Azimuth: "+
+                str(round(startaz[1],2))+self.degree_sign+"\nFinish: "+endtime[1]+
+                ", Azimuth: "+str(round(endaz[1],2))+self.degree_sign+
+                "\nMaximum Elevation: "+str(round(maxel[1],2))+self.degree_sign+
+                "\nPass 3:\nStart: "+starttime[2]+", Azimuth: "+
+                str(round(startaz[2],2))+self.degree_sign+"\nFinish: "+endtime[2]+
+                ", Azimuth: "+str(round(endaz[2],2))+self.degree_sign+
+                "\nMaximum Elevation: "+str(round(maxel[2],2))+self.degree_sign)
     
-    # Plot fft points
-    def fftplot():
-        while fftplotflag:
-            ax2.cla()
-            ax2.set_xlabel("Frequency [MHz]")
-            ax2.set_title("Signal Frequency Distribution")
-            ax2.set_xlim(2200, 2300)
-            ax2.set_ylim(0,10)
-            ax2.grid()
-            freq, mag = fft_points(int(str(centerfreq.get())) * 1000000)
-            ax2.plot(freq/1000000, mag, marker='o', color='blue')
-            graph2.draw()
-            time.sleep(0.2)
+    def intdeg2dms(self, deg):
+        """ Function to convert integer to degrees, minutes, and seconds. """
+        d = int(deg)
+        md = abs(deg - d) * 60
+        m = int(md)
+        sd = (md - m) * 60
+        return '%d:%d:%f' % (d, m, sd)
+        
+##############################################################################################
+    # Define Function for finding upcoming passes
+    def nextpass(self, tlefile, qthfile):
+        """ Determine Next 3 Pass timing and azimuth of start and finish time/azimuth. """
+        qth, locname = self.load_qth(qthfile) #load qth
+        tle, satname = self.load_tle(tlefile) # load tle
+        p = transits(tle, qth) # predict future passes
+        starttime, endtime, startaz, endaz, maxel = ([] for i in range(5)) #initialize
+        for i in range(3): # Predict 3 passes
+            transit = next(p) #Find next pass
+            starttime.append(time.ctime(transit.start))
+            endtime.append(time.ctime(transit.end))
+            startaz.append(observe(tle, qth, transit.start)['azimuth'])
+            endaz.append(observe(tle, qth, transit.end)['azimuth'])
+            maxel.append(transit.peak()['elevation'])
+        return starttime, endtime, startaz, endaz, maxel, locname, satname
 
-    # Spawn FFT process, change state
-    def fft_handler():
-        global fftplotflag
-        if fftplotflag == False:
-            fftplotflag = True
-            b2.configure(text="Stop", bg="red", fg='black')
-        else:
-            fftplotflag = False
-            b2.configure(text="Start", bg="green", fg='black')
-        threading.Thread(target=fftplot).start() #Start new plotting process
+##############################################################################################
+    # Define Azimuth and Elevation changes for Manual Mode
+    def increase_elevation(self):
+        """ Function to increase elevation by step size. """
+        if self.manflag:
+            if self.currentEl+self.step <= 90:
+                self.currentEl = self.currentEl + self.step
+            else:
+                self.currentEl=90
+
+    def decrease_elevation(self):
+        """ Function to decrease elevation by step size. """
+        if self.manflag:
+            if self.currentEl-self.step >= 0:
+                self.currentEl = self.currentEl - self.step
+            else:
+                self.currentEl=0
+            
+    def increase_azimuth(self):
+        """ Function to increase azimuth by step size. """
+        if self.manflag:
+            if self.currentAz + self.step >= 360:
+                self.currentAz = self.currentAz + self.step - 360
+            else:
+                self.currentAz = self.currentAz + self.step
+
+    def decrease_azimuth(self):
+        """ Function to decrease azimuth by step size. """
+        if self.manflag:
+            if self.currentAz-self.step < 0:
+                self.currentAz = self.currentAz - self.step + 360
+            else:
+                self.currentAz = self.currentAz - self.step
     
-    # Start/Stop Plotting button 
-    #b2 = Button(tr, text="Start", command=fft_handler, bg="green", fg='black')
-    
-    # Bottom Right Frame - Future Passes
-    degree_sign= u'\N{DEGREE SIGN}'
-    starttime, endtime, startaz, endaz, maxel, locname, satname = nextpass(str(tleloc.get()), str(qthloc.get()))
-    np_l = Label(t1b, text="Upcoming Passes for "+str(satname)+" over "+str(locname)+":\n"+
-        "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+
-        str(round(startaz[0],2))+degree_sign+"\nFinish: "+endtime[0]+
-        ", Azimuth: "+str(round(endaz[0],2))+degree_sign+
-        "\nMaximum Elevation: "+str(round(maxel[0],2))+degree_sign+
-        "\nPass 2:\nStart: "+starttime[1]+", Azimuth: "+
-        str(round(startaz[1],2))+degree_sign+"\nFinish: "+endtime[1]+
-        ", Azimuth: "+str(round(endaz[1],2))+degree_sign+
-        "\nMaximum Elevation: "+str(round(maxel[1],2))+degree_sign+
-        "\nPass 3:\nStart: "+starttime[2]+", Azimuth: "+
-        str(round(startaz[2],2))+degree_sign+"\nFinish: "+endtime[2]+
-        ", Azimuth: "+str(round(endaz[2],2))+degree_sign+
-        "\nMaximum Elevation: "+str(round(maxel[2],2))+degree_sign)
-    
-    # Function to recalculate future passes if new TLE loaded
-    def recalculate():
-        starttime, endtime, startaz, endaz, maxel, locname, satname = nextpass(str(tleloc.get()), str(qthloc.get()))
-        np_l.configure(text="Upcoming Passes for "+str(satname)+" over "+str(locname)+":\n"+
-            "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+
-            str(round(startaz[0],2))+degree_sign+"\nFinish: "+endtime[0]+
-            ", Azimuth: "+str(round(endaz[0],2))+degree_sign+
-            "\nMaximum Elevation: "+str(round(maxel[0],2))+degree_sign+
-            "\nPass 2:\nStart: "+starttime[1]+", Azimuth: "+
-            str(round(startaz[1],2))+degree_sign+"\nFinish: "+endtime[1]+
-            ", Azimuth: "+str(round(endaz[1],2))+degree_sign+
-            "\nMaximum Elevation: "+str(round(maxel[1],2))+degree_sign+
-            "\nPass 3:\nStart: "+starttime[2]+", Azimuth: "+
-            str(round(startaz[2],2))+degree_sign+"\nFinish: "+endtime[2]+
-            ", Azimuth: "+str(round(endaz[2],2))+degree_sign+
-            "\nMaximum Elevation: "+str(round(maxel[2],2))+degree_sign)
-    
-    # Button for recalculation of future passes
-    np_button = Button(t1b, text="Recalculate", command=recalculate, bg="blue", fg="black")
-    
-    # Pack Frames
-    #left.pack(side="left", expand=True, fill="both")
-    #right.pack(side="right", expand=True, fill="both")
-    t.pack(side='top', expand=True, fill="both", padx=10, pady=10)
-    t1.pack(side="left", expand=True, fill="both", padx=10, pady=10)
-    t2.pack(side="right",expand=True, fill="both", padx=10, pady=10)
-    t1t.pack(side='top', expand=True, fill="both", padx=10, pady=10)
-    t1b.pack(side='bottom', expand=True, fill="both", padx=10, pady=10)
-    #tr.pack(expand=True, fill="both", padx=10, pady=10)
-    b.pack(side="bottom", expand=True, fill="both", padx=10, pady=10)
-    #br.pack(expand=True, fill="both", padx=10, pady=10)
-    
-    # Pack everything else into frames
-    exitbutton.pack(side="left")
-    #logo.pack(side="top")
-    cbutton.pack(side="left")
-    logo.pack(side="left")
-    descrip.pack(side="left")
-    pointlabel.pack(side="top")
-    R1.pack(side="top")
-    R2.pack(side="top")
-    b_up.pack(side="top")
-    b_down.pack(side="top")
-    b_left.pack(side="top")
-    b_right.pack(side="top")
-    azlabel.pack(side="top")
-    azentry.pack(side="top")
-    ellabel.pack(side="top")
-    elentry.pack(side="top")
-    b_azelinput.pack(side="top")
-    azellabel.pack(side="top")
-    graph.get_tk_widget().pack(side="bottom",fill='both', expand=True)
-    b1.pack(side='left')
-    qth.pack(side="left")
-    qthentry.pack(side="left")
-    tle.pack(side="left")
-    tleentry.pack(side="left")
-    #graph2.get_tk_widget().pack(side="bottom",fill='both', expand=True)
-    #b2.pack(side='left')
-    #cf.pack(side="left")
-    #freqentry.pack(side="left")
-    np_l.pack(side="top")
-    np_button.pack(side="top")
-    
-    # Start GUI
-    set_azel_label()
-    root.mainloop()
+##############################################################################################
+    # Define Arrow Presses for Manual Mode
+    def uppress(self, event):
+        """ Function to map up press to increase elevation. """
+        increase_elevation()
+
+    def downpress(self, event):
+        """ Function to map down press to decrease elevation. """
+        decrease_elevation()
+
+    def rightpress(self, event):
+        """ Function to map right press to increase azimuth. """
+        increase_azimuth()
+
+    def leftpress(self, event):
+        """ Function to map left press to decrease azimuth. """
+        decrease_azimuth()
+# End of GUI Class
+
+##############################################################################################
+# Functions and class adapted from predict.py by Jesse Trutna
+def massage_tle(tle):
+    """ Function for getting correct tle data format. """
     try:
-        root.destroy()
+        # TLE may or may not have been split into lines already
+        if isinstance(tle, str):
+            tle = tle.rstrip().split('\n')
+        assert len(tle) == 3, "TLE must be 3 lines, not %d: %s" % (len(tle), tle)
+        return tle
+        #TODO: print a warning if TLE is 'too' old
+    except Exception as e:
+        raise PredictException(e)
+
+def massage_qth(qth):
+    """ Function for getting correct qth data format. """
+    try:
+        assert len(qth) == 3, "%s must consist of exactly three elements: (lat(N), long(W), alt(m))" % qth
+        return (float(qth[0]), float(qth[1]), int(qth[2]))
+    except ValueError as e:
+        raise PredictException("Unable to convert '%s' (%s)" % (qth, e))
+    except Exception as e:
+        raise PredictException(e)
+
+def observe(tle, qth, at=None):
+    """ Function to find azimuth and elevation at a certain time. """
+    tle = massage_tle(tle)
+    qth = massage_qth(qth)
+    if at is None:
+        at = time.time()
+    return quick_find(tle, at, qth)
+
+def transits(tle, qth, ending_after=None, ending_before=None):
+    """ Function to find upcoming passes of a specific satellite. """
+    tle = massage_tle(tle)
+    qth = massage_qth(qth)
+    if ending_after is None:
+        ending_after = time.time()
+    ts = ending_after
+    while True:
+        transit = quick_predict(tle, ts, qth)
+        t = Transit(tle, qth, start=transit[0]['epoch'], end=transit[-1]['epoch'])
+        if (ending_before != None and t.end > ending_before):
+            break
+        if (t.end > ending_after):
+            yield t
+        # Need to advance time cursor so predict doesn't yield same pass
+        ts = t.end + 60     #seconds seems to be sufficient
+        
+# Transit is a convenience class representing a pass of a satellite over a groundstation.
+class Transit():
+    """ Transit is a class representing a pass of a satellite over a groundstation. """
+    def __init__(self, tle, qth, start, end):
+        """ Initialization function. """
+        self.tle = massage_tle(tle)
+        self.qth = massage_qth(qth)
+        self.start = start
+        self.end = end
+
+    def peak(self, epsilon=0.1):
+        """ Function to find peak elevation. """
+        # NOTE: Assumes elevation is strictly monotonic or concave over the [start,end] interval
+        ts =  (self.end + self.start)/2
+        step = (self.end - self.start)
+        while (step > epsilon):
+            step /= 4
+            # Ascend the gradient at this step size
+            direction = None
+            while True:
+                mid   = observe(self.tle, self.qth, ts)['elevation']
+                left  = observe(self.tle, self.qth, ts - step)['elevation']
+                right = observe(self.tle, self.qth, ts + step)['elevation']
+                # Break if we're at a peak
+                if (left <= mid >= right):
+                    break
+                # Ascend up slope
+                slope = -1 if (left > right) else 1
+                # Break if we stepped over a peak (switched directions)
+                if direction is None:
+                    direction = slope
+                if direction != slope:
+                    break
+                # Break if stepping would take us outside of transit
+                next_ts = ts + (direction * step)
+                if (next_ts < self.start) or (next_ts > self.end):
+                    break
+                # Step towards the peak
+                ts = next_ts
+        return self.at(ts)
+
+    def above(self, elevation):
+        """ Function to return portion of transit above a certain elevation. """
+        return self.prune(lambda ts: self.at(ts)['elevation'] >= elevation)
+
+    def prune(self, fx, epsilon=0.1):
+        """ Function to return section of a transit where a pruning function is valid. """
+        # Currently used to set elevation threshold, unclear what other uses it might have.
+        # fx must either return false everywhere or true for a contiguous period including the peak
+        peak = self.peak()['epoch']
+        if not fx(peak):
+            start = peak
+            end = peak
+        else:
+            if fx(self.start):
+                start = self.start
+            else:
+                # Invariant is that fx(right) is True
+                left, right = self.start, peak
+                while ((right - left) > epsilon):
+                    mid = (left + right)/2
+                    if fx(mid):
+                        right = mid
+                    else:
+                        left = mid
+                start = right
+            if fx(self.end):
+                end = self.end
+            else:
+                # Invariant is that fx(left) is True
+                left, right = peak, self.end
+                while ((right - left) > epsilon):
+                    mid = (left + right)/2
+                    if fx(mid):
+                        left = mid
+                    else:
+                        right = mid
+                end = left
+        # Use copy to allow subclassing of Transit object
+        pruned = copy(self)
+        pruned.start = start
+        pruned.end = end
+        return pruned
+
+    def duration(self):
+        """ Function to return pass duration. """
+        return self.end - self.start
+
+    def at(self, t):
+        """ Function to return azimuth and elevation at certain time. """
+        if t < self.start or t > self.end:
+            raise PredictException("time %f outside transit [%f, %f]" % (t, self.start, self.end))
+        return observe(self.tle, self.qth, t)
+
+##############################################################################################
+# Define main function
+if __name__ == "__main__":
+    argus = GUI()
+    argus.set_azel_label()
+    argus.root.mainloop()
+    try:
+        argus.root.destroy()
     except:
         pass
     os._exit(1)
-################################################################
-if __name__ == "__main__":
-    main()

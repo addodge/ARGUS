@@ -27,13 +27,15 @@ sudo python3 setup.py install
 
 ### Usage:
 
-```./argus.py```
+```sudo ./argus.py```
 
-__Note:__ python3 version must be in /usr/bin/env python3.
+__Note:__ Running as root is required to be able to access the GPS serial port.
 
-__Note 2:__ QTH file in Location Name, Latitude (N), Longitude (E), Elevation (meters) format
+__Note 2:__ python3 version must be in /usr/bin/env python3.
 
-__Note 3:__ TLE in following format:
+__Note 3:__ QTH file in Location Name, Latitude (N), Longitude (E), Elevation (meters) format
+
+__Note 4:__ TLE in following format:
 ```
 ISS
 1 25544U 98067A   04236.56031392  .00020137  00000-0  16538-3 0  9993

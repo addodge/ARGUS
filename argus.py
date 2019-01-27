@@ -24,10 +24,9 @@ from tkinter import *
 from PIL import ImageTk, Image
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-import time, threading, os
+import time, threading, os, ephem, serial
 from copy import copy
 from cpredict import quick_find, quick_predict, PredictException
-import ephem
 
 class GUI:
     """ This is a class for creating the GUI for the ARGUS ground station. """
@@ -63,9 +62,13 @@ class GUI:
         self.b = Frame(self.root, borderwidth=2, relief="solid") #Bottom
         
         self.qthloc = StringVar()
+        self.qthloc.set("ARGUS.qth")
         self.tleloc = StringVar()
+        self.tleloc.set("MTI.tle")
         self.trackMode = IntVar()
         self.trackMode.set(1)
+        self.locMode = IntVar()
+        self.locMode.set(1)
         self.azinput = StringVar()
         self.elinput = StringVar()
         
@@ -116,22 +119,30 @@ class GUI:
                                                                 (self.currentAz, self.currentEl))
         self.pointlabel = Label(self.t2, text="Antenna Pointing:")
         
+        self.loclabel = Label(self.t2, text="Ground Station Location:")
+        self.findLocationQTH()
+        self.R3 = Radiobutton(self.t2, text="ARGUS.qth", variable=self.locMode, 
+                                                   value=1, command=self.findLocationQTH)
+        self.R4 = Radiobutton(self.t2, text="GPS", variable=self.locMode,
+                                                    value=2, command=self.findLocationGPS)
+        self.latlabel = Label(self.t2, text="Latitude: %3.2f" % self.lat)
+        self.lonlabel = Label(self.t2, text="Longitude: %3.2f" % self.lon)
+        self.altlabel = Label(self.t2, text="Altitude: %3.2f" % self.alt)
+        
         #### Bottom Left Frame - Azimuth/Elevation Plot
         # QTH file input
         self.qth = Label(self.b, text="QTH File:")
         self.qthentry = Entry(self.b, textvariable=self.qthloc)
-        self.qthloc.set("Boulder.qth")
         
         # TLE file input
         self.tle = Label(self.b, text="TLE File:")
         self.tleentry = Entry(self.b, textvariable=self.tleloc)
-        self.tleloc.set("MTI.tle")
         
         # Az/El Plot figure creation
         self.fig = Figure()
         self.ax = self.fig.add_subplot(111, projection='polar')
-        _, _, locname, satname = self.azel_points(str(self.tleloc.get()), str(self.qthloc.get()))
-        self.ax.set_title("Azimuth and Elevation of "+satname+" over "+locname)
+        _, _, satname = self.azel_points(str(self.tleloc.get()))
+        self.ax.set_title("Azimuth and Elevation of "+satname)
         self.ax.grid(True)
         self.ax.set_rlim(90, 0, 1)
         self.ax.set_yticks(np.arange(0, 91, 10))
@@ -144,10 +155,10 @@ class GUI:
         # Start/stop plotting button
         self.b1 = Button(self.b, text="Start", command=self.azel_handler, bg="green", fg='black')
         
-        starttime, endtime, startaz, endaz, maxel, locname, satname = \
-                self.nextpass(str(self.tleloc.get()), str(self.qthloc.get()))
+        starttime, endtime, startaz, endaz, maxel, satname = \
+                self.nextpass(str(self.tleloc.get()))
         self.np_l = Label(self.t1b, text = \
-                "Upcoming Passes for "+str(satname)+" over "+str(locname)+":\n"+
+                "Upcoming Passes for "+str(satname)+":\n"+
                 "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+
                 str(round(startaz[0],2))+self.degree_sign+"\nFinish: "+endtime[0]+
                 ", Azimuth: "+str(round(endaz[0],2))+self.degree_sign+
@@ -185,26 +196,90 @@ class GUI:
         self.b_down.pack(side="top")
         self.b_left.pack(side="top")
         self.b_right.pack(side="top")
-        self.azlabel.pack(side="top")
-        self.azentry.pack(side="top")
-        self.ellabel.pack(side="top")
-        self.elentry.pack(side="top")
-        self.b_azelinput.pack(side="top")
         self.azellabel.pack(side="top")
+        #self.azlabel.pack(side="top")
+        #self.azentry.pack(side="top")
+        #self.ellabel.pack(side="top")
+        #self.elentry.pack(side="top")
+        #self.b_azelinput.pack(side="top")
+        self.loclabel.pack(side="top")
+        self.R3.pack(side="top")
+        self.R4.pack(side="top")
+        self.latlabel.pack(side="top")
+        self.lonlabel.pack(side="top")
+        self.altlabel.pack(side="top")
         self.graph.get_tk_widget().pack(side="bottom",fill='both', expand=True)
         self.b1.pack(side='left')
-        self.qth.pack(side="left")
-        self.qthentry.pack(side="left")
+        #self.qth.pack(side="left")
+        #self.qthentry.pack(side="left")
         self.tle.pack(side="left")
         self.tleentry.pack(side="left")
         self.np_l.pack(side="top")
         self.np_button.pack(side="top")
 
 ##############################################################################################
+    def findLocationGPS(self):
+        #try:
+        ser = serial.Serial('/dev/ttyUSB0', '4800', timeout=5)
+        
+        num = 0
+        alt = []
+        long = []
+        lat = []
+        while num < 1:
+            line = ser.readline()
+            splitline = line.split(b',')
+            if splitline[0] == b'$GPGGA':
+                latDir = splitline[3].decode('ASCII')
+                if latDir == "N":
+                    lat.append(float(splitline[2].decode('ASCII'))/100)
+                elif latDir == "S":
+                    lat.append(float(splitline[2].decode('ASCII'))/-100)
+                else:
+                    print("Latitude not North or South")
+                    sys.exit(0)
+                
+                longDir = splitline[5].decode('ASCII')
+                if longDir == "E":
+                    long.append(float(splitline[4].decode('ASCII'))/100)
+                elif longDir == "W":
+                    long.append(float(splitline[4].decode('ASCII'))/-100)
+                else:
+                    print("Longitude not North or South")
+                    sys.exit(0)
+                
+                altUnit = splitline[10].decode('ASCII')
+                assert altUnit == "M"
+                alt.append(float(splitline[9].decode('ASCII')))
+                num = num+1
+
+        self.lat = np.mean(lat)
+        self.lon = -np.mean(long)
+        self.alt = np.mean(alt)
+        #self.set
+        self.latlabel['text'] = "Latitude: %3.2f" % self.lat
+        self.lonlabel['text'] = "Longitude: %3.2f" % self.lon
+        self.altlabel['text'] = "Altitude: %3.2f" % self.alt
+        #except:
+        #    print("No GPS connected to /dev/ttyUSB0")
+        #    self.locMode.set(1)
+
+    def findLocationQTH(self):
+        qth = self.load_qth(self.qthloc.get())
+        self.lat = qth[0]
+        self.lon = qth[1]
+        self.alt = qth[2]
+        try:
+            self.latlabel['text'] = "Latitude: %3.2f" % self.lat
+            self.lonlabel['text'] = "Longitude: %3.2f" % self.lon
+            self.altlabel['text'] = "Altitude: %3.2f" % self.alt
+        except:
+            pass
+        
+##############################################################################################
     # Define Functions for azimuth and elevation plotting
     def azelplot(self):
         """ Function to Plot Azimuth and Elevation. """
-        qthfile = str(self.qthloc.get())
         tlefile = str(self.tleloc.get())
         while self.azelplotflag:
             self.ax.cla()
@@ -215,9 +290,9 @@ class GUI:
             self.ax.invert_yaxis()
             self.ax.set_theta_zero_location("N")
             self.ax.set_theta_direction(-1)
-            az, el, locname, satname = self.azel_points(tlefile, qthfile)
-            sunAz, sunEl = self.findsun(qthfile)
-            self.ax.set_title("Azimuth and Elevation of "+satname+" over "+locname)
+            az, el, satname = self.azel_points(tlefile)
+            sunAz, sunEl = self.findsun()
+            self.ax.set_title("Azimuth and Elevation of "+satname)
             self.ax.scatter(az*np.pi/180, 90-el, marker='o', color='blue', label=satname)
             self.ax.scatter(sunAz*np.pi/180, 90-sunEl, marker='o', color='orange', label='Sun')
             self.ax.legend()
@@ -242,12 +317,12 @@ class GUI:
             self.b1.configure(text="Start", bg="green", fg='black')
         threading.Thread(target=self.azelplot).start() #Start new process to plot
         
-    def azel_points(self, tlefile, qthfile):
+    def azel_points(self, tlefile):
         """ Function to Produce Azimuth and Elevation using Predict. """
-        qth, locname = self.load_qth(qthfile)
+        qth = (self.lat, self.lon, self.alt)
         tle, satname = self.load_tle(tlefile)
         data = observe(tle, qth) #find current state
-        return data['azimuth'], data['elevation'], locname, satname
+        return data['azimuth'], data['elevation'], satname
     
 ##############################################################################################
     # Define Functions to set the azimuth and elevation along with the labels
@@ -299,10 +374,10 @@ class GUI:
             print('Error Reading '+qthfile+". Exiting.")
             os._exit(1)
         qth = list(map(lambda s: s.strip(), qth))
-        locname = qth[0]
+        self.locname = qth[0]
         qth = massage_qth(tuple(qth[1:])) #use predict.py to change variable types
         qth = (qth[0], -qth[1], qth[2])
-        return qth, locname
+        return qth
     
     def load_tle(self, tlefile):
         """ Function to Load orbital elements. """
@@ -320,13 +395,13 @@ class GUI:
     # Define Calibration Functions
     def call_calibrate(self):
         """ Function to call the calibrate function. """
-        self.calibrate(str(self.qthloc.get()))
+        self.calibrate()
         
-    def calibrate(self, qthfile):
+    def calibrate(self):
         """ Fuction to Calibrate Pointing angles using the Sun. """
         global currentAz, currentEl
         print("Calibrating...")
-        qth, _ = self.load_qth(qthfile)
+        qth = (self.lat, self.lon, self.alt)
         observer = ephem.Observer()
         observer.lat = self.intdeg2dms(qth[0])
         observer.lon = self.intdeg2dms(-qth[1])
@@ -341,14 +416,14 @@ class GUI:
         # Assume pointing close enough to the sun to get a signal
         
         # Set current Az/El to this azimuth and elevation
-        currentAz, currentEl = sun.az*180/np.pi, sun.alt*180/np.pi
+        self.currentAz, self.currentEl = sun.az*180/np.pi, sun.alt*180/np.pi
         print("Done.")
     
 ##############################################################################################
     # Define Functions for finding sun
-    def findsun(self, qthfile):
+    def findsun(self):
         """ Function to find the Sun for plotting. """
-        qth, _ = self.load_qth(qthfile)
+        qth = (self.lat, self.lon, self.alt)
         observer = ephem.Observer()
         observer.lat = self.intdeg2dms(qth[0])
         observer.lon = self.intdeg2dms(-qth[1])
@@ -360,10 +435,10 @@ class GUI:
         
     def recalculate(self):
         """ Function to recalculate future passes if new TLE loaded. """
-        starttime, endtime, startaz, endaz, maxel, locname, satname = \
-                 self.nextpass(str(self.tleloc.get()), str(self.qthloc.get()))
+        starttime, endtime, startaz, endaz, maxel, satname = \
+                 self.nextpass(str(self.tleloc.get()))
         self.np_l.configure(text = \
-                "Upcoming Passes for "+str(satname)+" over "+str(locname)+":\n"+
+                "Upcoming Passes for "+str(satname)+":\n"+
                 "\nPass 1:\nStart: "+starttime[0]+", Azimuth: "+
                 str(round(startaz[0],2))+self.degree_sign+"\nFinish: "+endtime[0]+
                 ", Azimuth: "+str(round(endaz[0],2))+self.degree_sign+
@@ -387,9 +462,9 @@ class GUI:
         
 ##############################################################################################
     # Define Function for finding upcoming passes
-    def nextpass(self, tlefile, qthfile):
+    def nextpass(self, tlefile):
         """ Determine Next 3 Pass timing and azimuth of start and finish time/azimuth. """
-        qth, locname = self.load_qth(qthfile) #load qth
+        qth = (self.lat, self.lon, self.alt)
         tle, satname = self.load_tle(tlefile) # load tle
         p = transits(tle, qth) # predict future passes
         starttime, endtime, startaz, endaz, maxel = ([] for i in range(5)) #initialize
@@ -400,7 +475,7 @@ class GUI:
             startaz.append(observe(tle, qth, transit.start)['azimuth'])
             endaz.append(observe(tle, qth, transit.end)['azimuth'])
             maxel.append(transit.peak()['elevation'])
-        return starttime, endtime, startaz, endaz, maxel, locname, satname
+        return starttime, endtime, startaz, endaz, maxel, satname
 
 ##############################################################################################
     # Define Azimuth and Elevation changes for Manual Mode
@@ -440,21 +515,20 @@ class GUI:
     # Define Arrow Presses for Manual Mode
     def uppress(self, event):
         """ Function to map up press to increase elevation. """
-        increase_elevation()
+        self.increase_elevation()
 
     def downpress(self, event):
         """ Function to map down press to decrease elevation. """
-        decrease_elevation()
+        self.decrease_elevation()
 
     def rightpress(self, event):
         """ Function to map right press to increase azimuth. """
-        increase_azimuth()
+        self.increase_azimuth()
 
     def leftpress(self, event):
         """ Function to map left press to decrease azimuth. """
-        decrease_azimuth()
+        self.decrease_azimuth()
 # End of GUI Class
-
 ##############################################################################################
 # Functions and class adapted from predict.py by Jesse Trutna
 def massage_tle(tle):

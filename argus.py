@@ -17,6 +17,8 @@
 # the sizing is way off because of the bad font. It is better to use the system python 3 and 
 # make sure that matplotlib is version 2.2.3 because there is an issue with a segmentation fault
 # on self.graph.draw() when using matplotlib 3.0.1. 
+
+# The predict section was adapted from predict.py by Jesse Trutna. This is lines 549 through 689.
 ##############################################################################################
 ### Necessary Modules
 import numpy as np
@@ -124,7 +126,7 @@ class GUI:
         self.R3 = Radiobutton(self.t2, text="ARGUS.qth", variable=self.locMode, 
                                                    value=1, command=self.findLocationQTH)
         self.R4 = Radiobutton(self.t2, text="GPS", variable=self.locMode,
-                                                    value=2, command=self.findLocationGPS)
+                  value=2, command=self.startGPS)
         self.latlabel = Label(self.t2, text="Latitude: %3.2f" % self.lat)
         self.lonlabel = Label(self.t2, text="Longitude: %3.2f" % self.lon)
         self.altlabel = Label(self.t2, text="Altitude: %3.2f" % self.alt)
@@ -218,10 +220,16 @@ class GUI:
         self.np_button.pack(side="top")
 
 ##############################################################################################
+    def startGPS(self):
+        threading.Thread(target=self.findLocationGPS).start()
+    
     def findLocationGPS(self):
-        #try:
-        ser = serial.Serial('/dev/ttyUSB0', '4800', timeout=5)
-        
+        try:
+            ser = serial.Serial('/dev/ttyUSB0', '4800', timeout=5)
+        except:
+            print("No GPS connected to /dev/ttyUSB0.")
+            self.locMode.set(1)
+            return
         num = 0
         alt = []
         long = []
@@ -229,6 +237,16 @@ class GUI:
         while num < 1:
             line = ser.readline()
             splitline = line.split(b',')
+            try:
+                if splitline[1] == b'':
+                    print('No GPS data received. \n \
+                           Check if red light is blinking or run "sudo gpsmon /dev/ttyUSB0."')
+                    self.locMode.set(1)
+                    return
+            except:
+                print('No GPS data received. ')
+                self.locMode.set(1)
+                return
             if splitline[0] == b'$GPGGA':
                 latDir = splitline[3].decode('ASCII')
                 if latDir == "N":
@@ -236,8 +254,9 @@ class GUI:
                 elif latDir == "S":
                     lat.append(float(splitline[2].decode('ASCII'))/-100)
                 else:
-                    print("Latitude not North or South")
-                    sys.exit(0)
+                    print("Latitude not North or South.")
+                    self.locMode.set(1)
+                    return
                 
                 longDir = splitline[5].decode('ASCII')
                 if longDir == "E":
@@ -245,8 +264,9 @@ class GUI:
                 elif longDir == "W":
                     long.append(float(splitline[4].decode('ASCII'))/-100)
                 else:
-                    print("Longitude not North or South")
-                    sys.exit(0)
+                    print("Longitude not East or West")
+                    self.locMode.set(1)
+                    return
                 
                 altUnit = splitline[10].decode('ASCII')
                 assert altUnit == "M"
@@ -256,13 +276,9 @@ class GUI:
         self.lat = np.mean(lat)
         self.lon = -np.mean(long)
         self.alt = np.mean(alt)
-        #self.set
         self.latlabel['text'] = "Latitude: %3.2f" % self.lat
         self.lonlabel['text'] = "Longitude: %3.2f" % self.lon
         self.altlabel['text'] = "Altitude: %3.2f" % self.alt
-        #except:
-        #    print("No GPS connected to /dev/ttyUSB0")
-        #    self.locMode.set(1)
 
     def findLocationQTH(self):
         qth = self.load_qth(self.qthloc.get())

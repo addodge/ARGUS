@@ -1,0 +1,180 @@
+Done with Sample Generation: 24.1719479561 seconds elapsed.
+Done with program: 612.701929092 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 1
+-------------------------------------------------
+Done with Sample Generation: 25.983951807 seconds elapsed.
+Done with program: 625.587223053 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 2
+-------------------------------------------------
+Done with Sample Generation: 26.60034585 seconds elapsed.
+Done with program: 633.525279999 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 3
+-------------------------------------------------
+Done with Sample Generation: 24.9335589409 seconds elapsed.
+Done with program: 610.06408 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 4
+-------------------------------------------------
+Done with Sample Generation: 24.7996630669 seconds elapsed.
+Done with program: 613.903115988 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 5
+-------------------------------------------------
+Done with Sample Generation: 24.9469871521 seconds elapsed.
+Done with program: 615.87489295 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 6
+-------------------------------------------------
+Done with Sample Generation: 25.2994520664 seconds elapsed.
+Done with program: 605.916100979 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 7
+-------------------------------------------------
+Done with Sample Generation: 24.8695168495 seconds elapsed.
+Done with program: 607.153153181 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 8
+-------------------------------------------------
+Done with Sample Generation: 25.0959150791 seconds elapsed.
+Done with program: 606.110703945 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 9
+-------------------------------------------------
+Done with Sample Generation: 24.9498090744 seconds elapsed.
+Done with program: 608.590255022 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 10
+-------------------------------------------------
+Done with Sample Generation: 24.9906580448 seconds elapsed.
+Done with program: 607.980003834 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 11
+-------------------------------------------------
+Done with Sample Generation: 24.9910860062 seconds elapsed.
+Done with program: 605.972361088 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 12
+-------------------------------------------------
+Done with Sample Generation: 24.5486960411 seconds elapsed.
+Done with program: 610.421019077 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 13
+-------------------------------------------------
+Done with Sample Generation: 24.9677021503 seconds elapsed.
+Done with program: 605.454200983 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 14
+-------------------------------------------------
+Done with Sample Generation: 24.2091009617 seconds elapsed.
+Done with program: 612.057281971 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 15
+-------------------------------------------------
+Done with Sample Generation: 25.039963007 seconds elapsed.
+Done with program: 609.916154861 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 16
+-------------------------------------------------
+Done with Sample Generation: 25.0692000389 seconds elapsed.
+Done with program: 610.657310009 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 17
+-------------------------------------------------
+Done with Sample Generation: 25.3708260059 seconds elapsed.
+Done with program: 614.927262068 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 18
+-------------------------------------------------
+Done with Sample Generation: 25.1442739964 seconds elapsed.
+Done with program: 607.65454793 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 19
+-------------------------------------------------
+Done with Sample Generation: 25.1452078819 seconds elapsed.
+Done with program: 613.46468997 seconds elapsed.
+Number in: 250000000
+Number out: 249999982
+Number not equal: 0
+Total bits: 249999982
+BER: 0
+Done with 20
+-------------------------------------------------

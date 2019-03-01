@@ -14,6 +14,7 @@
 ### Necessary Modules
 import unittest, time
 from argusUtils import *
+import numpy as np
 
 ##############################################################################################
 class argusTestCase(unittest.TestCase):
@@ -43,6 +44,7 @@ class argusTestCase(unittest.TestCase):
                 "Motor Call function does not change state. Is motor connected?")
     
     def test_setANDstatus(self):
+        #time.sleep(5)
         self.gui.stopMotor()
         self.assertEqual(self.gui.motstart['bg'], 'green')
         self.gui.startMotor()
@@ -51,10 +53,13 @@ class argusTestCase(unittest.TestCase):
         self.gui.currentEl = self.gui.currentEl + 3
         az, el = self.gui.currentAz, self.gui.currentEl
         self.gui.set()
+        time.sleep(10)
+        self.gui.status()
         time.sleep(1)
         self.gui.status()
-        self.assertEqual(self.gui.currentAz, az)
-        self.assertEqual(self.gui.currentEl, el)
+        #time.sleep(5)
+        self.assertTrue(np.abs(self.gui.currentAz-az) <= 0.3)
+        self.assertTrue(np.abs(self.gui.currentEl-el) <= 0.3)
     
     def test_stop(self):
         self.gui.stopMotor()

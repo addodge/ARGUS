@@ -3,7 +3,7 @@
 # Adam Dodge
 # ARGUS Ground Station GUI
 # Date Created: 10/24/2018
-# Date Modified: 2/26/2019
+# Date Modified: 2/28/2019
 ##############################################################################################
 # Description / Notes:
 
@@ -32,8 +32,6 @@ from cpredict import quick_find, quick_predict, PredictException
 
 ##############################################################################################
 # THINGS TO DO:
-#       Look at 0-90 vs 0-180 elevation to figure out how to do overhead passes better
-#       Ports - By Serial ID
 #       Can we just send position commands every second or do we need to come up with something?
 #       Does elevation work in positive or negative direction?
 ##############################################################################################
@@ -49,12 +47,13 @@ class GUI:
         self.currentAz = 0 # Current Pointing azimuth
         self.currentEl = 0 # Current Pointing Elevation
         self.motorOn = False # True if motor is on
-        self.debug = False
-        self.step = 0.1 #step movement for antenna
+        self.debug = True
+        self.step = 0.2 #step movement for antenna
         self.maxAz = 360
         self.minAz = -360
         self.maxEl = 180
         self.minEl = 0
+        self.plotWaitTime = 0.1 #seconds - how often to send a command
         self.motorPath = '/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_AH01B33D-if00-port0'
         self.GPSPath = '/dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_D-if00-port0'
         self.degree_sign = u'\N{DEGREE SIGN}'
@@ -143,9 +142,9 @@ class GUI:
                                                    value=1, command=self.findLocationQTH)
         self.R4 = Radiobutton(self.t2, text="GPS", variable=self.locMode,
                   value=2, command=self.startGPS)
-        self.latlabel = Label(self.t2, text="Latitude: %3.2f" % self.lat)
-        self.lonlabel = Label(self.t2, text="Longitude: %3.2f" % self.lon)
-        self.altlabel = Label(self.t2, text="Altitude: %3.2f" % self.alt)
+        self.latlabel = Label(self.t2, text="Latitude: %3.2f" % self.lat+self.degree_sign)
+        self.lonlabel = Label(self.t2, text="Longitude: %3.2f" % self.lon+self.degree_sign)
+        self.altlabel = Label(self.t2, text="Altitude: %3.2f" % self.alt+"m")
         
         #### Bottom Left Frame - Azimuth/Elevation Plot
         # QTH file input
@@ -384,7 +383,7 @@ class GUI:
             return
         num = 0
         alt = []
-        long = []
+        lon = []
         lat = []
         while num < 1:
             line = self.GPSser.readline()
@@ -400,20 +399,27 @@ class GUI:
                 return
             if splitline[0] == b'$GPGGA':
                 latDir = splitline[3].decode('ASCII')
+                latTemp = splitline[2].decode('ASCII')
+                ind = latTemp.index(".")
+                latTemp = float(latTemp[:ind-2]) + float(latTemp[ind-2:])/60
                 if latDir == "N":
-                    lat.append(float(splitline[2].decode('ASCII'))/100)
+                    lat.append(latTemp)
                 elif latDir == "S":
-                    lat.append(float(splitline[2].decode('ASCII'))/-100)
+                    lat.append(-latTemp)
                 else:
                     print("Latitude not North or South.\n")
                     self.locMode.set(1)
                     return
                 
                 longDir = splitline[5].decode('ASCII')
+                lonTemp = splitline[4].decode('ASCII')
+                ind = lonTemp.index(".")
+                lonTemp = float(lonTemp[:ind-2]) + float(lonTemp[ind-2:])/60
                 if longDir == "E":
-                    long.append(float(splitline[4].decode('ASCII'))/100)
+                    
+                    lon.append(lonTemp)
                 elif longDir == "W":
-                    long.append(float(splitline[4].decode('ASCII'))/-100)
+                    lon.append(-lonTemp)
                 else:
                     print("Longitude not East or West.\n")
                     self.locMode.set(1)
@@ -425,12 +431,11 @@ class GUI:
                 num = num+1
 
         self.lat = np.mean(lat)
-        self.lon = -np.mean(long)
+        self.lon = -np.mean(lon)
         self.alt = np.mean(alt)
-        self.latlabel['text'] = "Latitude: %3.2f" % self.lat
-        self.lonlabel['text'] = "Longitude: %3.2f" % self.lon
-        self.altlabel['text'] = "Altitude: %3.2f" % self.alt
-        
+        self.latlabel['text'] = "Latitude: %3.2f" % self.lat + self.degree_sign
+        self.lonlabel['text'] = "Longitude: %3.2f" % self.lon + self.degree_sign
+        self.altlabel['text'] = "Altitude: %3.2f" % self.alt + "m"
         self.GPSser.close()
 
     def findLocationQTH(self):
@@ -439,9 +444,9 @@ class GUI:
         self.lon = qth[1]
         self.alt = qth[2]
         try:
-            self.latlabel['text'] = "Latitude: %3.2f" % self.lat
-            self.lonlabel['text'] = "Longitude: %3.2f" % self.lon
-            self.altlabel['text'] = "Altitude: %3.2f" % self.alt
+            self.latlabel['text'] = "Latitude: %3.2f" % self.lat + self.degree_sign
+            self.lonlabel['text'] = "Longitude: %3.2f" % self.lon + self.degree_sign
+            self.altlabel['text'] = "Altitude: %3.2f" % self.alt + "m"
         except:
             pass
         
@@ -451,28 +456,7 @@ class GUI:
         """ Function to Plot Azimuth and Elevation. """
         tlefile = str(self.tleloc.get())
         while self.azelplotflag:
-            self.ax.cla()
-            self.ax.grid(True)
-            self.ax.set_rlim(90, 0, 1)
-            self.ax.set_yticks(np.arange(0, 91, 10))
-            self.ax.set_yticklabels(self.ax.get_yticks()[::-1])
-            self.ax.invert_yaxis()
-            self.ax.set_theta_zero_location("N")
-            self.ax.set_theta_direction(-1)
             az, el, satname = self.azel_points(tlefile)
-            sunAz, sunEl = self.findsun()
-            self.ax.set_title("Azimuth and Elevation of "+satname)
-            if el > 90:
-                plotel = 180-el
-                plotaz = az+180
-            else:
-                plotel=el
-                plotaz=az
-            self.ax.scatter(plotaz*np.pi/180, 90-plotel, marker='o', color='blue', label=satname)
-            self.ax.scatter(sunAz*np.pi/180, 90-sunEl, marker='o', color='orange', label='Sun')
-            self.ax.legend()
-            self.graph.draw() #CAUSES ISSUES IN MATPLOTLIB
-            time.sleep(0.2)
             if self.progflag:
                 if el<self.minEl:
                     el = self.minEl
@@ -494,7 +478,6 @@ class GUI:
                     elvec.append(180-el)
                     azvec.append(az-360)
                     elvec.append(el)
-                
                 cost = []
                 cost.append((azvec[0]-self.currentAz)**2+(elvec[0]-self.currentEl)**2)
                 cost.append((azvec[1]-self.currentAz)**2+(elvec[1]-self.currentEl)**2)
@@ -506,8 +489,29 @@ class GUI:
                 self.currentAz = az
                 self.currentEl = el
                 self.set()
-                self.oldAz = az
-                self.oldEl = el
+                self.status()
+                self.status()
+            self.ax.cla()
+            self.ax.grid(True)
+            self.ax.set_rlim(90, 0, 1)
+            self.ax.set_yticks(np.arange(0, 91, 10))
+            self.ax.set_yticklabels(self.ax.get_yticks()[::-1])
+            self.ax.invert_yaxis()
+            self.ax.set_theta_zero_location("N")
+            self.ax.set_theta_direction(-1)
+            sunAz, sunEl = self.findsun()
+            self.ax.set_title("Azimuth and Elevation of "+satname)
+            if el > 90:
+                plotel = 180-el
+                plotaz = az+180
+            else:
+                plotel=el
+                plotaz=az
+            self.ax.scatter(plotaz*np.pi/180, 90-plotel, marker='o', color='blue', label=satname)
+            self.ax.scatter(sunAz*np.pi/180, 90-sunEl, marker='o', color='orange', label='Sun')
+            self.ax.legend()
+            self.graph.draw() #CAUSES ISSUES IN MATPLOTLIB
+            time.sleep(self.plotWaitTime)
     
     def azel_handler(self):
         """ Function to Spawn Azimuth and Elevation process, switch state. """
@@ -610,8 +614,8 @@ class GUI:
         print("Calibrating...")
         qth = (self.lat, self.lon, self.alt)
         observer = ephem.Observer()
-        observer.lat = self.intdeg2dms(qth[0])
-        observer.lon = self.intdeg2dms(-qth[1])
+        observer.lat = intdeg2dms(qth[0])
+        observer.lon = intdeg2dms(-qth[1])
         observer.elevation = qth[2]
 
         # Track Sun to determine azimuth and elevation
@@ -623,7 +627,7 @@ class GUI:
         # Assume pointing close enough to the sun to get a signal
         # Set current Az/El to this azimuth and elevation
         self.currentAz, self.currentEl = sun.az*180/np.pi, sun.alt*180/np.pi
-        print("Done.\n")
+        print("Done. SET AZ and EL on Controller!\n")
     
 ##############################################################################################
     # Define Functions for finding sun
@@ -631,8 +635,8 @@ class GUI:
         """ Function to find the Sun for plotting. """
         qth = (self.lat, self.lon, self.alt)
         observer = ephem.Observer()
-        observer.lat = self.intdeg2dms(qth[0])
-        observer.lon = self.intdeg2dms(-qth[1])
+        observer.lat = intdeg2dms(qth[0])
+        observer.lon = intdeg2dms(-qth[1])
         observer.elevation = qth[2]
         sun = ephem.Sun()
         sun.compute(observer)
@@ -657,14 +661,6 @@ class GUI:
                 str(round(startaz[2],2))+self.degree_sign+"\nFinish: "+endtime[2]+
                 ", Azimuth: "+str(round(endaz[2],2))+self.degree_sign+
                 "\nMaximum Elevation: "+str(round(maxel[2],2))+self.degree_sign)
-    
-    def intdeg2dms(self, deg):
-        """ Function to convert integer to degrees, minutes, and seconds. """
-        d = int(deg)
-        md = abs(deg - d) * 60
-        m = int(md)
-        sd = (md - m) * 60
-        return '%d:%d:%f' % (d, m, sd)
         
 ##############################################################################################
     # Define Function for finding upcoming passes
@@ -693,6 +689,8 @@ class GUI:
             else:
                 self.currentEl = self.maxEl
             self.set()
+            self.status()
+            self.status()
 
     def decrease_elevation(self):
         """ Function to decrease elevation by step size. """
@@ -702,6 +700,8 @@ class GUI:
             else:
                 self.currentEl = self.minEl
             self.set()
+            self.status()
+            self.status()
             
     def increase_azimuth(self):
         """ Function to increase azimuth by step size. """
@@ -711,6 +711,8 @@ class GUI:
             else:
                 self.currentAz = self.currentAz + self.step
             self.set()
+            self.status()
+            self.status()
 
     def decrease_azimuth(self):
         """ Function to decrease azimuth by step size. """
@@ -720,6 +722,8 @@ class GUI:
             else:
                 self.currentAz = self.currentAz - self.step
             self.set()
+            self.status()
+            self.status()
     
 ##############################################################################################
     # Define Arrow Presses for Manual Mode
@@ -738,7 +742,17 @@ class GUI:
     def leftpress(self, event):
         """ Function to map left press to decrease azimuth. """
         self.decrease_azimuth()
+
 # End of GUI Class
+##############################################################################################
+def intdeg2dms(self, deg):
+    """ Function to convert integer to degrees, minutes, and seconds. """
+    d = int(deg)
+    md = abs(deg - d) * 60
+    m = int(md)
+    sd = (md - m) * 60
+    return '%d:%d:%f' % (d, m, sd)
+
 ##############################################################################################
 # Functions and class adapted from predict.py by Jesse Trutna
 def massage_tle(tle):

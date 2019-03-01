@@ -46,7 +46,7 @@
     </param>
     <param>
       <key>id</key>
-      <value>receive</value>
+      <value>receiveQPSK</value>
     </param>
     <param>
       <key>max_nouts</key>
@@ -226,7 +226,7 @@
     </param>
     <param>
       <key>mod_code</key>
-      <value>"gray"</value>
+      <value>"none"</value>
     </param>
     <param>
       <key>id</key>
@@ -246,7 +246,7 @@
     </param>
     <param>
       <key>constellation_points</key>
-      <value>8</value>
+      <value>4</value>
     </param>
     <param>
       <key>phase_bw</key>
@@ -254,7 +254,7 @@
     </param>
     <param>
       <key>samples_per_symbol</key>
-      <value>2</value>
+      <value>3</value>
     </param>
     <param>
       <key>timing_bw</key>

@@ -2,8 +2,8 @@
 # -*- coding: utf-8 -*-
 ##################################################
 # GNU Radio Python Flow Graph
-# Title: Transmit
-# Generated: Wed Feb 27 11:13:43 2019
+# Title: Receiveqpsk
+# Generated: Fri Mar  1 15:27:58 2019
 ##################################################
 
 from distutils.version import StrictVersion
@@ -29,18 +29,17 @@ from gnuradio import qtgui
 from gnuradio.eng_option import eng_option
 from gnuradio.filter import firdes
 from optparse import OptionParser
-import numpy
 import sip
 import sys
 from gnuradio import qtgui
 
 
-class transmit(gr.top_block, Qt.QWidget):
+class receiveQPSK(gr.top_block, Qt.QWidget):
 
     def __init__(self):
-        gr.top_block.__init__(self, "Transmit")
+        gr.top_block.__init__(self, "Receiveqpsk")
         Qt.QWidget.__init__(self)
-        self.setWindowTitle("Transmit")
+        self.setWindowTitle("Receiveqpsk")
         qtgui.util.check_set_qss()
         try:
             self.setWindowIcon(Qt.QIcon.fromTheme('gnuradio-grc'))
@@ -58,7 +57,7 @@ class transmit(gr.top_block, Qt.QWidget):
         self.top_grid_layout = Qt.QGridLayout()
         self.top_layout.addLayout(self.top_grid_layout)
 
-        self.settings = Qt.QSettings("GNU Radio", "transmit")
+        self.settings = Qt.QSettings("GNU Radio", "receiveQPSK")
 
         if StrictVersion(Qt.qVersion()) < StrictVersion("5.0.0"):
             self.restoreGeometry(self.settings.value("geometry").toByteArray())
@@ -83,7 +82,7 @@ class transmit(gr.top_block, Qt.QWidget):
         self.qtgui_time_sink_x_0.set_update_time(0.10)
         self.qtgui_time_sink_x_0.set_y_axis(-1, 1)
 
-        self.qtgui_time_sink_x_0.set_y_label('Amplitude', "")
+        self.qtgui_time_sink_x_0.set_y_label('Signal', "")
 
         self.qtgui_time_sink_x_0.enable_tags(-1, True)
         self.qtgui_time_sink_x_0.set_trigger_mode(qtgui.TRIG_MODE_FREE, qtgui.TRIG_SLOPE_POS, 0.0, 0, 0, "")
@@ -130,15 +129,15 @@ class transmit(gr.top_block, Qt.QWidget):
         	firdes.WIN_BLACKMAN_hARRIS, #wintype
         	0, #fc
         	samp_rate, #bw
-        	"", #name
+        	"FFT", #name
         	1 #number of inputs
         )
         self.qtgui_freq_sink_x_0.set_update_time(0.10)
-        self.qtgui_freq_sink_x_0.set_y_axis(-140, 10)
+        self.qtgui_freq_sink_x_0.set_y_axis(-100, 10)
         self.qtgui_freq_sink_x_0.set_y_label('Relative Gain', 'dB')
         self.qtgui_freq_sink_x_0.set_trigger_mode(qtgui.TRIG_MODE_FREE, 0.0, 0, "")
         self.qtgui_freq_sink_x_0.enable_autoscale(False)
-        self.qtgui_freq_sink_x_0.enable_grid(False)
+        self.qtgui_freq_sink_x_0.enable_grid(True)
         self.qtgui_freq_sink_x_0.set_fft_average(1.0)
         self.qtgui_freq_sink_x_0.enable_axis_labels(True)
         self.qtgui_freq_sink_x_0.enable_control_panel(False)
@@ -168,33 +167,31 @@ class transmit(gr.top_block, Qt.QWidget):
 
         self._qtgui_freq_sink_x_0_win = sip.wrapinstance(self.qtgui_freq_sink_x_0.pyqwidget(), Qt.QWidget)
         self.top_layout.addWidget(self._qtgui_freq_sink_x_0_win)
-        self.pluto_sink_0 = iio.pluto_sink('ip:pluto.local', int(2500000000), int(samp_rate), int(freq), 0x8000, False, 10.0, '', True)
-        self.digital_psk_mod_0 = digital.psk.psk_mod(
+        self.pluto_source_0 = iio.pluto_source('ip:pluto.local', int(2400000000), int(samp_rate), int(freq), 0x8000, True, True, True, "manual", 64.0, '', True)
+        self.digital_psk_demod_0 = digital.psk.psk_demod(
           constellation_points=4,
-          mod_code="none",
           differential=True,
           samples_per_symbol=3,
           excess_bw=0.35,
+          phase_bw=6.28/100.0,
+          timing_bw=6.28/100.0,
+          mod_code="none",
           verbose=False,
           log=False,
           )
-        self.blocks_throttle_0 = blocks.throttle(gr.sizeof_char*1, samp_rate,True)
-        self.blocks_file_sink_0 = blocks.file_sink(gr.sizeof_char*1, 'transmitted.bin', False)
+        self.blocks_file_sink_0 = blocks.file_sink(gr.sizeof_char*1, 'received.bin', False)
         self.blocks_file_sink_0.set_unbuffered(True)
-        self.analog_random_source_x_0 = blocks.vector_source_b(map(int, numpy.random.randint(0, 2, 1000)), True)
 
         ##################################################
         # Connections
         ##################################################
-        self.connect((self.analog_random_source_x_0, 0), (self.blocks_throttle_0, 0))
-        self.connect((self.blocks_throttle_0, 0), (self.blocks_file_sink_0, 0))
-        self.connect((self.blocks_throttle_0, 0), (self.digital_psk_mod_0, 0))
-        self.connect((self.digital_psk_mod_0, 0), (self.pluto_sink_0, 0))
-        self.connect((self.digital_psk_mod_0, 0), (self.qtgui_freq_sink_x_0, 0))
-        self.connect((self.digital_psk_mod_0, 0), (self.qtgui_time_sink_x_0, 0))
+        self.connect((self.digital_psk_demod_0, 0), (self.blocks_file_sink_0, 0))
+        self.connect((self.pluto_source_0, 0), (self.digital_psk_demod_0, 0))
+        self.connect((self.pluto_source_0, 0), (self.qtgui_freq_sink_x_0, 0))
+        self.connect((self.pluto_source_0, 0), (self.qtgui_time_sink_x_0, 0))
 
     def closeEvent(self, event):
-        self.settings = Qt.QSettings("GNU Radio", "transmit")
+        self.settings = Qt.QSettings("GNU Radio", "receiveQPSK")
         self.settings.setValue("geometry", self.saveGeometry())
         event.accept()
 
@@ -205,18 +202,17 @@ class transmit(gr.top_block, Qt.QWidget):
         self.samp_rate = samp_rate
         self.qtgui_time_sink_x_0.set_samp_rate(self.samp_rate)
         self.qtgui_freq_sink_x_0.set_frequency_range(0, self.samp_rate)
-        self.pluto_sink_0.set_params(int(2500000000), int(self.samp_rate), int(self.freq), 10.0, '', True)
-        self.blocks_throttle_0.set_sample_rate(self.samp_rate)
+        self.pluto_source_0.set_params(int(2400000000), int(self.samp_rate), int(self.freq), True, True, True, "manual", 64.0, '', True)
 
     def get_freq(self):
         return self.freq
 
     def set_freq(self, freq):
         self.freq = freq
-        self.pluto_sink_0.set_params(int(2500000000), int(self.samp_rate), int(self.freq), 10.0, '', True)
+        self.pluto_source_0.set_params(int(2400000000), int(self.samp_rate), int(self.freq), True, True, True, "manual", 64.0, '', True)
 
 
-def main(top_block_cls=transmit, options=None):
+def main(top_block_cls=receiveQPSK, options=None):
 
     if StrictVersion("4.5.0") <= StrictVersion(Qt.qVersion()) < StrictVersion("5.0.0"):
         style = gr.prefs().get_string('qtgui', 'style', 'raster')

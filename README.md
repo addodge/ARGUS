@@ -29,7 +29,7 @@ sudo python3 setup.py install
 
 ```sudo ./argus.py```
 
-__Note:__ Running as root is required to be able to access the GPS serial port.
+__Note:__ Running as root is required to be able to access the GPS and Motor Controller serial port.
 
 __Note 2:__ python3 version must be in /usr/bin/env python3.
 

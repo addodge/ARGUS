@@ -43,4 +43,4 @@ ISS
 ```
 
 ### Acknowledgements:
-predict.py, setup.py, and predict.c adapted from PyPredict (https://github.com/nsat/pypredict)
+predict.py and predict.c adapted from PyPredict (https://github.com/nsat/pypredict)

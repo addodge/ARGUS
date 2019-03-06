@@ -33,9 +33,6 @@ from cpredict import quick_find, quick_predict, PredictException
 ##############################################################################################
 # THINGS TO DO:
 #       Look at 0-90 vs 0-180 elevation to figure out how to do overhead passes better
-#       Ports - By Serial ID
-#       Can we just send position commands every second or do we need to come up with something?
-#       Does elevation work in positive or negative direction?
 ##############################################################################################
 class GUI:
     """ This is a class for creating the GUI for the ARGUS ground station. """
@@ -55,20 +52,40 @@ class GUI:
         self.minAz = -360
         self.maxEl = 180
         self.minEl = 0
+        self.plotWaitTime = 0.1
         self.motorPath = '/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_AH01B33D-if00-port0'
         self.GPSPath = '/dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_D-if00-port0'
-        self.num = 500
-        self.el = np.stack([np.linspace(0,180,self.num), np.linspace(0, 180, self.num),
-                         np.linspace(0, 180, self.num), np.linspace(0, 180, self.num)], axis=0)
-        self.az = np.stack([np.ones(self.num)*-45, np.ones(self.num)*-135,
-                       np.linspace(0, 180, self.num), np.linspace(180, 360, self.num)], axis=0)
-        print("Start AZ:", self.az[0][0], self.az[1][0], self.az[2][0], self.az[3][0])
-        print("Start EL:", self.el[0][0], self.el[1][0], self.el[2][0], self.el[3][0])
-        self.i, self.j = 0, 0
+        self.motorAz, self.motorEl = 0, 0
+        self.azSAT, self.elSAT, self.azMOT, self.elMOT, self.timeSAT, self.timeMOT = \
+                                    ([] for i in range(6))
+        self.i = 3
         self.degree_sign = u'\N{DEGREE SIGN}'
         self.buildGUI()
-        #self.startMotor()
 
+    def loadData(self):
+        f1 = "Sim_azel_1.txt"
+        f2 = "Sim_azel_2.txt"
+        f3 = "Sim_azel_3.txt"
+        az1, el1, az2, el2, az3, el3 = ([] for i in range(6))
+        with open(f1, 'r') as f:
+            for line in f:
+                data = [x.strip() for x in line.split(' ')]
+                az1.append(float(data[0]))
+                el1.append(float(data[1]))
+        with open(f2, 'r') as f:
+            for line in f:
+                data = [x.strip() for x in line.split(' ')]
+                az2.append(float(data[0]))
+                el2.append(float(data[1]))
+        with open(f3, 'r') as f:
+            for line in f:
+                data = [x.strip() for x in line.split(' ')]
+                az3.append(float(data[0]))
+                el3.append(float(data[1]))
+        
+        self.az = (az1, az2, az3)
+        self.el = (el1, el2, el3)
+        
 ##############################################################################################
     # Define function to build the GUI
     def buildGUI(self):
@@ -88,9 +105,9 @@ class GUI:
         self.b = Frame(self.root, borderwidth=2, relief="solid") #Bottom
         
         self.qthloc = StringVar()
-        self.qthloc.set("../ARGUS.qth")
+        self.qthloc.set("ARGUS.qth")
         self.tleloc = StringVar()
-        self.tleloc.set("../MTI.tle")
+        self.tleloc.set("MTI.tle")
         self.trackMode = IntVar()
         self.trackMode.set(1)
         self.locMode = IntVar()
@@ -310,6 +327,8 @@ class GUI:
                 print("Elevation: " + str(el))
                 print("PH: " + str(ph))
                 print("PV: " + str(pv) + "\n")
+            self.motorAz = az
+            self.motorEl = el
             self.currentAz = az
             self.currentEl = el
     
@@ -356,8 +375,8 @@ class GUI:
         There is no response to the SET command, thus nothing to return.
         """
         if self.motorOn:
-            az1 = self.currentAz
-            el1 = self.currentEl
+            az1 = self.motorAz
+            el1 = self.motorEl
             assert(float(az1) <= self.maxAz)
             assert(float(az1) >= self.minAz)
             assert(float(el1) <= self.maxEl)
@@ -452,94 +471,147 @@ class GUI:
             self.altlabel['text'] = "Altitude: %3.2f" % self.alt
         except:
             pass
-        
+
 ##############################################################################################
     # Define Functions for azimuth and elevation plotting
-    def azelplot(self):
+    def azelmotcall(self):
         """ Function to Plot Azimuth and Elevation. """
         tlefile = str(self.tleloc.get())
+        t_form = "%a %b %d %H:%M:%S %Y"
+        starttime, endtime, startaz, endaz, maxel, satname = self.nextpass(tlefile)
+        print(maxel)
+        initial_time = time.mktime(time.strptime(starttime[self.i], t_form))
+        end_time = time.mktime(time.strptime(endtime[self.i], t_form))
+        dt = initial_time - time.time()
+        self.motWaitTime = 0.2
+        self.speed, self.spTime = [], []
+        k = 0
+        j = 0
+        self.satname = "Test Passes"
+        oldTime = time.time()
+        self.spTime.append(oldTime)
+        t = time.time()+dt
         while self.azelplotflag:
-            self.ax.cla()
-            self.ax.grid(True)
-            self.ax.set_rlim(90, 0, 1)
-            self.ax.set_yticks(np.arange(0, 91, 10))
-            self.ax.set_yticklabels(self.ax.get_yticks()[::-1])
-            self.ax.invert_yaxis()
-            self.ax.set_theta_zero_location("N")
-            self.ax.set_theta_direction(-1)
-            if self.j >= self.num:
+            if t >= end_time:
                 self.azel_handler()
                 self.i = self.i+1
-                self.j = 0
+                with open('mot_t_az_el.txt','w') as f:
+                    for x, y, z in zip(self.timeMOT, self.azMOT, self.elMOT):
+                        f.write(str(x)+" "+str(y)+" "+str(z)+"\n")
+                with open('comm_t_az_el.txt','w') as f:
+                    for x, y, z in zip(self.timeSAT, self.azSAT, self.elSAT):
+                        f.write(str(x)+" "+str(y)+" "+str(z)+"\n")
+                with open('speed.txt','w') as f:
+                    for x, y in zip(self.spTime, self.speed):
+                        f.write(str(x)+" "+str(y)+"\n")
                 return
-            az = self.az[self.i][self.j]
-            el = self.el[self.i][self.j]
-            self.j = self.j+1
-            satname = "Test Passes"
-            sunAz, sunEl = self.findsun()
-            self.ax.set_title("Azimuth and Elevation of "+satname)
-            if el > 90:
-                plotel = 180-el
-                plotaz = az+180
-            else:
-                plotel=el
-                plotaz=az
-            self.ax.scatter(plotaz*np.pi/180, 90-plotel, marker='o', color='blue', label=satname)
-            self.ax.scatter(sunAz*np.pi/180, 90-sunEl, marker='o', color='orange', label='Sun')
-            self.ax.legend()
-            self.graph.draw() #CAUSES ISSUES IN MATPLOTLIB
-            time.sleep(0.2)
+            t = time.time()+dt
+            az, el, _ = self.azel_points(tlefile, t)
+            j += 1
             if self.progflag:
                 if el<self.minEl:
                     el = self.minEl
-                azvec = []
-                azvec.append(az)
-                elvec = []
-                elvec.append(el)
-                if az>180:
-                    azvec.append(az-180)
-                    elvec.append(180-el)
-                    azvec.append(az-360)
-                    elvec.append(el)
-                    azvec.append(az-540)
-                    elvec.append(180-el)
-                else:
-                    azvec.append(az+180)
-                    elvec.append(180-el)
-                    azvec.append(az-180)
-                    elvec.append(180-el)
-                    azvec.append(az-360)
-                    elvec.append(el)
-                
-                cost = []
-                cost.append((azvec[0]-self.currentAz)**2+(elvec[0]-self.currentEl)**2)
-                cost.append((azvec[1]-self.currentAz)**2+(elvec[1]-self.currentEl)**2)
-                cost.append((azvec[2]-self.currentAz)**2+(elvec[2]-self.currentEl)**2)
-                cost.append((azvec[3]-self.currentAz)**2+(elvec[3]-self.currentEl)**2)
-                ind = cost.index(min(cost))
-                az = azvec[ind]
-                el = elvec[ind]
+                spAz = (az-self.currentAz)/(time.time()-self.spTime[-1])
+                spEl = (el-self.currentEl)/(time.time()-self.spTime[-1])
+                self.speed.append(np.sqrt(spAz**2+spEl**2))
+                self.spTime.append(time.time())
                 self.currentAz = az
                 self.currentEl = el
-                self.set()
-                self.oldAz = az
-                self.oldEl = el
+                
+                if np.sqrt((az-self.motorAz)**2+(el-self.motorEl)**2) >= 0.3:
+                    azvec = []
+                    azvec.append(az)
+                    elvec = []
+                    elvec.append(el)
+                    if az>180:
+                        azvec.append(az-180)
+                        elvec.append(180-el)
+                        azvec.append(az-360)
+                        elvec.append(el)
+                        azvec.append(az-540)
+                        elvec.append(180-el)
+                    else:
+                        azvec.append(az+180)
+                        elvec.append(180-el)
+                        azvec.append(az-180)
+                        elvec.append(180-el)
+                        azvec.append(az-360)
+                        elvec.append(el)
+                    cost = []
+                    cost.append((azvec[0]-self.currentAz)**2+(elvec[0]-self.currentEl)**2)
+                    cost.append((azvec[1]-self.currentAz)**2+(elvec[1]-self.currentEl)**2)
+                    cost.append((azvec[2]-self.currentAz)**2+(elvec[2]-self.currentEl)**2)
+                    cost.append((azvec[3]-self.currentAz)**2+(elvec[3]-self.currentEl)**2)
+                    ind = cost.index(min(cost))
+                    az = azvec[ind]
+                    el = elvec[ind]
+                    self.currentAz, self.currentEl = az, el
+                    if np.sqrt((az-self.motorAz)**2+(el-self.motorEl)**2)<=2 and el-self.motorEl>=0.1:
+                        self.motorAz = (az-self.motorAz)*1 + az
+                        self.motorEl = (el-self.motorEl)*1 + el
+                    else:
+                        self.motorAz, self.motorEl = self.currentAz, self.currentEl
+                    threading.Thread(target=self.set).start()
+                    self.timeMOT.append(time.time())
+                    self.azMOT.append(self.motorAz)
+                    self.elMOT.append(self.motorEl)
+                self.timeSAT.append(time.time())
+                self.azSAT.append(self.currentAz)
+                self.elSAT.append(self.currentEl)
+                
+            if k%5 == 0:
+                self.plotAz, self.plotEl = self.currentAz, self.currentEl
+                threading.Thread(target=self.azelplot).start() #Start new process to plot
+            k += 1
+            time.sleep(self.motWaitTime)
+            
+            print("Time elapsed:",str(time.time()-oldTime))
+            oldTime = time.time()
+    
+    def azelplot(self):
+        self.ax.cla()
+        self.ax.grid(True)
+        self.ax.set_rlim(90, 0, 1)
+        self.ax.set_yticks(np.arange(0, 91, 10))
+        self.ax.set_yticklabels(self.ax.get_yticks()[::-1])
+        self.ax.invert_yaxis()
+        self.ax.set_theta_zero_location("N")
+        self.ax.set_theta_direction(-1)
+        sunAz, sunEl = self.findsun()
+        az, el = self.plotAz, self.plotEl
+        self.ax.set_title("Azimuth and Elevation of "+self.satname)
+        if el > 90:
+            plotel = 180-el
+            plotaz = az+180
+        elif el <= 0:
+            plotel = -10
+            plotaz = az
+        else:
+            plotel=el
+            plotaz=az
+        self.ax.scatter(plotaz*np.pi/180, 90-plotel, marker='o', color='blue', label=self.satname)
+        self.ax.scatter(sunAz*np.pi/180, 90-sunEl, marker='o', color='orange', label='Sun')
+        self.ax.legend()
+        self.graph.draw() #CAUSES ISSUES IN MATPLOTLIB
     
     def azel_handler(self):
         """ Function to Spawn Azimuth and Elevation process, switch state. """
         if self.azelplotflag == False:
             self.azelplotflag = True
             self.b1.configure(text="Stop Tracking", bg="red", fg='black')
-            threading.Thread(target=self.azelplot).start() #Start new process to plot
+            threading.Thread(target=self.azelmotcall).start() #Start new process to track
         else:
             self.azelplotflag = False
             self.b1.configure(text="Start Tracking", bg="green", fg='black')
         
-    def azel_points(self, tlefile):
+    def azel_points(self, tlefile, t=None):
         """ Function to Produce Azimuth and Elevation using Predict. """
         qth = (self.lat, self.lon, self.alt)
         tle, satname = self.load_tle(tlefile)
-        data = observe(tle, qth) #find current state
+        if t is None:
+            data = observe(tle, qth) #find current state
+        else:
+            data = observe(tle, qth, t)
         return data['azimuth'], data['elevation'], satname
     
 ##############################################################################################
@@ -690,7 +762,7 @@ class GUI:
         tle, satname = self.load_tle(tlefile) # load tle
         p = transits(tle, qth) # predict future passes
         starttime, endtime, startaz, endaz, maxel = ([] for i in range(5)) #initialize
-        for i in range(3): # Predict 3 passes
+        for i in range(10): # Predict 3 passes
             transit = next(p) #Find next pass
             starttime.append(time.ctime(transit.start))
             endtime.append(time.ctime(transit.end))

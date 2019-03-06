@@ -17,8 +17,6 @@
 # the sizing is way off because of the bad font. It is better to use the system python 3 and 
 # make sure that matplotlib is version 2.2.3 because there is an issue with a segmentation fault
 # on self.graph.draw() when using matplotlib 3.0.1. 
-
-# The predict section was adapted from predict.py by Jesse Trutna. This is lines 549 through 689.
 ##############################################################################################
 ### Necessary Modules
 from argusUtils import *

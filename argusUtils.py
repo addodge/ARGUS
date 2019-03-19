@@ -7,11 +7,11 @@
 ##############################################################################################
 # Description / Notes:
 
-# This file creates a GUI for controlling the ARGUS ground station tracking ability. Currently
-# it is able to track the satellite and show the tracking in the GUI. The next steps are to 
-# add the motor control functions and figure out how exactly it will track over a path when the 
-# controller only takes in position commands, as well as to implement the GPS receiver to take
-# in the latitude and longitude of the ground station. 
+# This file creates a GUI for controlling the ARGUS ground station tracking ability.
+# It is able to track the satellite and show the tracking in the GUI. It also can find the 
+# location of the ground station eiter using a QTH file or the GPS. It is able to use the 
+# Satellite location to follow a satellite across the sky, or can be put in manual mode to
+# control the motion of the motors manually. 
 
 # IMPORTANT: I do not recommend using anaconda python for this GUI. The font looks terrible and
 # the sizing is way off because of the bad font. It is better to use the system python 3 and 
@@ -20,6 +20,11 @@
 
 # The predict section was adapted from predict.py by Jesse Trutna. This is lines 783-end.
 ##############################################################################################
+'''
+gm = geomag.geomag.GeoMag()
+gm.GeoMag(40.015, -105.27, 1624).dec
+'''
+
 ### Necessary Modules
 import numpy as np
 from tkinter import *
@@ -585,6 +590,7 @@ class GUI:
             while azinput_val < self.minAz:
                 azinput_val = azinput_val+360
             self.currentAz = azinput_val
+            self.motorAz, self.motorEl = self.currentAz, self.currentEl
             # Set values and send command to motor controller
             self.azinput.set(str(round(self.currentAz, 2)))
             self.elinput.set(str(round(self.currentEl, 2)))
@@ -722,6 +728,7 @@ class GUI:
                 self.currentEl = self.currentEl + self.step
             else:
                 self.currentEl = self.maxEl
+            self.motorEl = self.currentEl
             self.set()
 
     def decrease_elevation(self):
@@ -731,6 +738,7 @@ class GUI:
                 self.currentEl = self.currentEl - self.step
             else:
                 self.currentEl = self.minEl
+            self.motorEl = self.currentEl
             self.set()
             
     def increase_azimuth(self):
@@ -740,6 +748,7 @@ class GUI:
                 self.currentAz = self.currentAz + self.step - 360
             else:
                 self.currentAz = self.currentAz + self.step
+            self.motorAz = self.currentAz
             self.set()
 
     def decrease_azimuth(self):
@@ -749,6 +758,7 @@ class GUI:
                 self.currentAz = self.currentAz - self.step + 360
             else:
                 self.currentAz = self.currentAz - self.step
+            self.motorAz = self.currentAz
             self.set()
     
 ##############################################################################################

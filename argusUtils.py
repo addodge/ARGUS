@@ -60,6 +60,7 @@ class GUI:
         self.minEl = 0 # Minimum ground station elevation
         self.motorAz, self.motorEl = 0, 0 # initialize motor angles
         self.motWaitTime = 0.2 #seconds - how often to send a command
+        self.pulse = 10 #Initialize just in case - motor resolution
         # Serial connection paths
         self.motorPath = '/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_AH01B33D-if00-port0'
         self.GPSPath = '/dev/serial/by-id/usb-Prolific_Technology_Inc._USB-Serial_Controller_D-if00-port0'
@@ -117,10 +118,10 @@ class GUI:
         self.R2 = Radiobutton(self.t2, text="Program Track", variable=self.trackMode,
                                                     value=2, command=self.go_program)
         # Map arrow keys to same functions
-        self.root.bind('<Up>', self.uppress)
-        self.root.bind('<Down>', self.downpress)
-        self.root.bind('<Left>', self.leftpress)
-        self.root.bind('<Right>', self.rightpress)
+        #self.root.bind('<Up>', self.uppress)
+        #self.root.bind('<Down>', self.downpress)
+        #self.root.bind('<Left>', self.leftpress)
+        #self.root.bind('<Right>', self.rightpress)
         
         # Value inputs
         self.azlabel = Label(self.t2, text="Input Azimuth: ")

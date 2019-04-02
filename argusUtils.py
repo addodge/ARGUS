@@ -88,7 +88,7 @@ class GUI:
         self.qthloc = StringVar() #QTH file location
         self.qthloc.set("ARGUS.qth")
         self.tleloc = StringVar() #TLE file location
-        self.tleloc.set("MTI.tle")
+        self.tleloc.set("SWAS.tle")
         self.trackMode = IntVar() #Variable for program or manual mode
         self.trackMode.set(1)
         self.locMode = IntVar() #Variable for GPS or QTH location
@@ -106,10 +106,10 @@ class GUI:
         self.logo.image = img
         
         # GUI Description
-        self.descrip = Label(self.t1t, text="ARGUS\nTracking\nGUI") 
+        self.descrip = Label(self.t1t, text="ARGUS Tracking GUI\nCU Boulder - Raytheon") 
         # Calibrate Button
-        self.cbutton = Button(self.t1t, text="Calibrate", bg="green", fg="black",
-                                                    command=self.call_calibrate)
+        #self.cbutton = Button(self.t1t, text="Calibrate", bg="green", fg="black",
+        #                                            command=self.call_calibrate)
         
         ##### Pointing Frame
         # Track Mode buttons
@@ -130,10 +130,12 @@ class GUI:
         self.elentry = Entry(self.t2, textvariable=self.elinput)
         self.azinput.set(str(round(self.currentAz, 2)))
         self.elinput.set(str(round(self.currentEl, 2)))
-        self.b_azelinput = Button(self.t2, text="Set Az/El", bg="white", fg="black",
+        self.b_azelinput = Button(self.t2, text="Set Az/El", bg="yellow2", fg="black",
                              command=self.set_azel)
         self.azellabel = Label(self.t2, text="Current Azimuth: %3.2f, Current Elevation: %3.2f" %
                                                                 (self.currentAz, self.currentEl))
+        self.reset_button = Button(self.t2, text="Retrieve Motor Angles",
+                             command=self.status, bg="yellow2", fg="black")
         self.pointlabel = Label(self.t2, text="Antenna Pointing:")
         
         # GPS location inputs
@@ -147,19 +149,26 @@ class GUI:
         self.lonlabel = Label(self.t2, text="Longitude: %3.2f" % self.lon+self.degree_sign)
         self.altlabel = Label(self.t2, text="Altitude: %3.2f" % self.alt+"m")
         
+        # Sun location
+        self.sunAz, self.sunEl = self.findsun()
+        self.sunazellabel = Label(self.t2, text="Sun Azimuth: %3.2f, Sun Elevation: %3.2f" %
+                                                                (self.sunAz, self.sunEl))
+        self.sun_button = Button(self.t2, text="Recalculate Sun Position",
+                             command=self.recalculateSun, bg="orange", fg="black")
+        
         #### Bottom Left Frame - Azimuth/Elevation Plot        
         # TLE file input
         self.tle = Label(self.b, text="TLE File:")
         self.tleentry = Entry(self.b, textvariable=self.tleloc)
         
         # IS MOTOR ON
-        self.motstart = Button(self.b, text="Connect Motor", bg="green", fg="black",
+        self.motstart = Button(self.b, text="Connect Motor", bg="green2", fg="black",
                  command=self.motorCall)
         self.motstop = Button(self.b, text="Stop Motor Motion", bg='red', fg='black',
                  command=self.stop)
         
         # Az/El Plot figure creation
-        self.fig = Figure()
+        self.fig = Figure(figsize=(4,4))
         self.ax = self.fig.add_subplot(111, projection='polar')
         _, _, self.satname = self.azel_points(str(self.tleloc.get()))
         self.ax.set_title("Azimuth and Elevation of "+self.satname)
@@ -173,7 +182,7 @@ class GUI:
         self.graph = FigureCanvasTkAgg(self.fig, master=self.b)
         
         # Start/stop plotting button
-        self.b1 = Button(self.b, text="Start Tracking", command=self.azel_handler, bg="green", fg='black')
+        self.b1 = Button(self.b, text="Start Tracking", command=self.azel_handler, bg="green2", fg='black')
         
         starttime, endtime, startaz, endaz, maxel, self.satname = \
                 self.nextpass(str(self.tleloc.get()))
@@ -193,8 +202,8 @@ class GUI:
                 "\nMaximum Elevation: "+str(round(maxel[2],2))+self.degree_sign)
         
         # Button for recalculation of future passes
-        self.np_button = Button(self.t1b, text="Recalculate", command=self.recalculate, 
-                                                            bg="blue", fg="black")
+        self.np_button = Button(self.t1b, text="Recalculate Passes", command=self.recalculate, 
+                                                      bg="deep sky blue", fg="black")
         
         # Pack Frames
         self.t.pack(side='top', expand=True, fill="both", padx=10, pady=10)
@@ -206,13 +215,14 @@ class GUI:
         
         # Pack everything else into frames
         self.exitbutton.pack(side="left")
-        self.cbutton.pack(side="left")
+        #self.cbutton.pack(side="left")
         self.logo.pack(side="left")
         self.descrip.pack(side="left")
         self.pointlabel.pack(side="top")
         self.R1.pack(side="top")
         self.R2.pack(side="top")
         self.azellabel.pack(side="top")
+        self.reset_button.pack(side="top")
         self.azlabel.pack(side="top")
         self.azentry.pack(side="top")
         self.ellabel.pack(side="top")
@@ -224,6 +234,8 @@ class GUI:
         self.latlabel.pack(side="top")
         self.lonlabel.pack(side="top")
         self.altlabel.pack(side="top")
+        self.sunazellabel.pack(side="top")
+        self.sun_button.pack(side="top")
         self.graph.get_tk_widget().pack(side="bottom",fill='both', expand=True)
         self.b1.pack(side='left')
         self.tle.pack(side="left")
@@ -262,7 +274,7 @@ class GUI:
             pass #No motor connected
         self.motorOn = False
         self.motstart['text'] = "Connect Motor" #set button
-        self.motstart['bg'] = "green"
+        self.motstart['bg'] = "green2"
     
     def status(self):
         """
@@ -297,6 +309,8 @@ class GUI:
                 print("PV: " + str(pv) + "\n")
             self.currentAz, self.currentEl = az, el #set az/el's
             self.motorAz, self.motorEl = az, el
+        else:
+            print("Motor not connected.")
     
     def stop(self):
         """
@@ -331,6 +345,8 @@ class GUI:
                 print("PV: " + str(pv) + "\n")
             self.currentAz, self.currentEl = az, el #Set az/el's
             self.motorAz, self.motorEl = az, el
+        else:
+            print("Motor not connected.")
     
     def set(self):
         """
@@ -361,6 +377,8 @@ class GUI:
                 print("Set Azimuth:   " + str(az1) + " (" + str(az) + ")")
                 print("Set Elevation: " + str(el1) + " (" + str(el) + ")")
                 print("Pulse: " + chr(self.pulse) + "\n")
+        else:
+            print("Motor not connected.")
     
 ##############################################################################################
 # Define functions for finding ground station location from GPS and QTH
@@ -557,7 +575,7 @@ class GUI:
             threading.Thread(target=self.azelmotcall).start() #Start new process to plot
         else:
             self.azelplotflag = False
-            self.b1.configure(text="Start Tracking", bg="green", fg='black') #configure button
+            self.b1.configure(text="Start Tracking", bg="green2", fg='black') #configure button
         
     def azel_points(self, tlefile):
         """ Function to Produce Azimuth and Elevation using Predict. """
@@ -672,7 +690,7 @@ class GUI:
 ##############################################################################################
 # Define Functions for finding sun
     def findsun(self):
-        """ Function to find the Sun for plotting. """
+        """ Function to find the Sun for display & plotting. """
         qth = (self.lat, self.lon, self.alt)
         observer = ephem.Observer() # Create observer and set values
         observer.lat = intdeg2dms(qth[0])
@@ -682,6 +700,19 @@ class GUI:
         sun.compute(observer)
         sunAz, sunEl = sun.az*180/np.pi, sun.alt*180/np.pi
         return sunAz, sunEl
+    
+    def recalculateSun(self):
+        """ Function to recalculate the Sun's postion for display. """
+        qth = (self.lat, self.lon, self.alt)
+        observer = ephem.Observer() # Create observer and set values
+        observer.lat = intdeg2dms(qth[0])
+        observer.lon = intdeg2dms(-qth[1])
+        observer.elevation = qth[2]
+        sun = ephem.Sun() # Find sun
+        sun.compute(observer)
+        self.sunAz, self.sunEl = sun.az*180/np.pi, sun.alt*180/np.pi
+        self.sunazellabel.configure(text="Sun Azimuth: %3.2f, Sun Elevation: %3.2f" %
+                                                                (self.sunAz, self.sunEl))
         
     def recalculate(self):
         """ Function to recalculate future passes if new TLE loaded. """

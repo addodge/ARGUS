@@ -49,8 +49,8 @@ def azel_points(tlefile, qthfile, t):
 ################################################################
 
 if __name__ == "__main__":
-    qthfile = 'Boulder.qth'
-    tlefile = 'MTI.tle'
+    qthfile = 'ARGUS.qth'
+    tlefile = 'iridium139.tle'
     # Find passes
     qth, locname = load_qth(qthfile) #load qth
     tle, satname = load_tle(tlefile) # load tle
@@ -71,13 +71,15 @@ if __name__ == "__main__":
         maxel.append(transit.peak()['elevation'])
         azvec, elvec = [], []
         t = transit.start
-        while t < transit.end:
-            az, el, locname, satname = azel_points(tlefile, qthfile, t)
-            azvec.append(az*np.pi/180)
-            elvec.append(90-el)
-            t = t+2
-        ax.plot(azvec, elvec, color='blue')
-        
+        if i==0:
+            while t < transit.end:
+                az, el, locname, satname = azel_points(tlefile, qthfile, t)
+                azvec.append(az*np.pi/180)
+                elvec.append(90-el)
+                t = t+1
+            ax.plot(azvec, elvec, color='blue')
+    
+    print(maxel)
     # Fix
     ax.set_title("Azimuth and Elevation of "+satname+" over "+locname)
     ax.grid(True)

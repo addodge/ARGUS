@@ -56,10 +56,10 @@ class GUI:
         self.step = 0.2 # step movement for antenna
         self.maxAz = 360 # Maximum ground station azimuth
         self.minAz = -360 # Minimum ground station azimuth
-        self.maxEl = 180 # Maximum ground station elevation
-        self.minEl = 0 # Minimum ground station elevation
+        self.maxEl = 175 # Maximum ground station elevation
+        self.minEl = 5 # Minimum ground station elevation
         self.motorAz, self.motorEl = 0, 0 # initialize motor angles
-        self.motWaitTime = 0.2 #seconds - how often to send a command
+        self.motWaitTime = 0.1 #seconds - how often to send a command
         self.pulse = 10 #Initialize just in case - motor resolution
         # Serial connection paths
         self.motorPath = '/dev/serial/by-id/usb-FTDI_FT232R_USB_UART_AH01B33D-if00-port0'
@@ -415,7 +415,12 @@ class GUI:
                 latDir = splitline[3].decode('ASCII') #Latitude direction
                 latTemp = splitline[2].decode('ASCII') #Latitude value (deg min.mindecimal)
                 # Example: 4001.36 is 40 degrees, 1.36 minutes
-                ind = latTemp.index(".")
+                try:
+                    ind = latTemp.index(".")
+                except:
+                    print('No GPS data received from:\n'+self.GPSPath+'\nCheck if red light is blinking.\n')
+                    self.locMode.set(1)
+                    return
                 latTemp = float(latTemp[:ind-2]) + float(latTemp[ind-2:])/60 #Convert to decimal
                 if latDir == "N": #Determine sign based on direction
                     lat.append(latTemp)
